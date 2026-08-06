@@ -1,0 +1,6 @@
+- [x] SIPaKMeD
+- [x] CPSMI2025
+- [x] Herlev
+- [ ] HiCervix
+- [x] Mendeley LBC
+- [x] BMT
