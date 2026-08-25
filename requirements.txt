@@ -8,3 +8,5 @@ datasets
 peft
 accelerate
 huggingface_hub
+opencv-python
+kaggle
