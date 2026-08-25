@@ -1,0 +1,44 @@
+Herlev:
+Herlev Dataset/test/carcinoma_in_situ
+Herlev Dataset/test/light_dysplastic
+Herlev Dataset/test/moderate_dysplastic
+Herlev Dataset/test/normal_columnar
+Herlev Dataset/test/normal_intermediate
+Herlev Dataset/test/normal_superficiel
+Herlev Dataset/test/severe_dysplastic
+Herlev Dataset/train/carcinoma_in_situ
+Herlev Dataset/train/light_dysplastic
+Herlev Dataset/train/moderate_dysplastic
+Herlev Dataset/train/normal_columnar
+Herlev Dataset/train/normal_intermediate
+Herlev Dataset/train/normal_superficiel
+Herlev Dataset/train/severe_dysplastic
+
+CPSMI2025:
+CPSMI2025/CPSMI2025/cancer/adeno
+CPSMI2025/CPSMI2025/cancer/in_situ
+CPSMI2025/CPSMI2025/cancer/invasive
+CPSMI2025/CPSMI2025/lesion/high_grade
+CPSMI2025/CPSMI2025/lesion/low_grade
+CPSMI2025/CPSMI2025/normal/endocervical
+CPSMI2025/CPSMI2025/normal/metaplasia
+CPSMI2025/CPSMI2025/normal/squamous
+CPSMI2025/CPSMI2025/others/inflammatory
+
+MendeleyLBC:
+High squamous intra-epithelial lesion
+Low squamous intra-epithelial lesion
+Negative for Intraepithelial malignancy
+Squamous cell carcinoma
+
+SIPaKMeD:
+im_Dyskeratotic/im_Dyskeratotic
+im_Dyskeratotic/im_Dyskeratotic/CROPPED
+im_Koilocytotic/im_Koilocytotic
+im_Koilocytotic/im_Koilocytotic/CROPPED
+im_Metaplastic/im_Metaplastic
+im_Metaplastic/im_Metaplastic/CROPPED
+im_Parabasal/im_Parabasal
+im_Parabasal/im_Parabasal/CROPPED
+im_Superficial-Intermediate/im_Superficial-Intermediate
+im_Superficial-Intermediate/im_Superficial-Intermediate/CROPPED
