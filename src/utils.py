@@ -1,0 +1,94 @@
+import os
+import time
+import torch
+from pathlib import Path
+
+from log import logger  # local log.py with global logger
+
+
+def print_message(msg, end='\n'):
+    print(time.strftime('%Y-%m-%d %H:%M:%S') + ' ' + str(msg), end=end)
+
+
+def time_diff(start_time, end_time):
+    elapsed = end_time - start_time
+    hours = elapsed // 3600
+    minutes = (elapsed % 3600) // 60
+    seconds = elapsed % 60
+    
+    return f'{hours:.0f}h {minutes:.0f}m {seconds:.0f}s'
+    
+
+def epoch_stats(epoch: int, history_entry: dict):
+    log_string = f'Epoch: {epoch:>3}  |  '
+
+    metrics_string = ', '.join([
+        f'{name}: {metric}'
+        for name, metric in history_entry.items()
+    ])
+
+    logger.log(log_string + metrics_string)
+
+
+def save_checkpoint(model, optimizer, scheduler, epoch: int, metrics: dict, path: Path) -> None:
+    tmp = Path(path).with_suffix(".pt.tmp")
+    torch.save({
+        "epoch": epoch,
+        "model_state": model.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "scheduler_state": scheduler.state_dict(),
+        "metrics": {k: float(v) for k, v in metrics.items()},
+    }, tmp)
+    os.replace(tmp, path)
+    print(f"  checkpoint → {path}")
+
+
+class EarlyStopping:
+    """
+    Stops training when monitored metric stops improving.
+
+    Args:
+        patience:   epochs to wait after last improvement before stopping
+        min_delta:  minimum change to qualify as an improvement
+        mode:       'min' for loss, 'max' for metrics like AUROC/MCC
+    """
+    def __init__(
+        self,
+        patience: int = 5,
+        min_delta: float = 0.0,
+        mode: str = 'min',
+        verbose: bool = True,
+    ):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.mode = mode
+        self.verbose = verbose
+
+        self.counter = 0
+        self.best_score = None
+        self.should_stop = False
+
+    def _is_improvement(self, score: float) -> bool:
+        if self.best_score is None:
+            return True
+        if self.mode == 'min':
+            return score < self.best_score - self.min_delta
+        else:
+            return score > self.best_score + self.min_delta
+
+    def step(self, score: float) -> bool:
+        """
+        Call at the end of each epoch.
+        Returns True if training should stop.
+        """
+        if self._is_improvement(score):
+            self.best_score = score
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.verbose:
+                print(f"  [EarlyStopping] no improvement for {self.counter}/{self.patience} epochs")
+            if self.counter >= self.patience:
+                self.should_stop = True
+
+        return self.should_stop
