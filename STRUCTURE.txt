@@ -42,3 +42,16 @@ im_Parabasal/im_Parabasal
 im_Parabasal/im_Parabasal/CROPPED
 im_Superficial-Intermediate/im_Superficial-Intermediate
 im_Superficial-Intermediate/im_Superficial-Intermediate/CROPPED
+
+BTM:
+annotated examples/
+  NIL ({i}) - annot.JPG
+  LSIL ({i}) - annot.JPG
+  HSIL ({i}) - annot.JPG
+  manifest.csv
+  SYNAPSE_METADATA_MANIFEST.tsv
+NIL ({i}).JPG
+LSIL ({i}).JPG
+HSIL ({i}).JPG
+manifest.csv
+SYNAPSE_METADATA_MANIFEST.tsv

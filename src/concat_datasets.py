@@ -11,18 +11,15 @@ before concatenation is meaningful. Two schemas are defined here, matching
 what each dataset can honestly support:
 
   - BETHESDA schema: for datasets whose labels are (or cleanly correspond
-    to) Bethesda System diagnostic categories. Native fit: MendeleyLBC.
-    Direct mapping (dataset already encodes lesion grade): CPSMI2025.
+    to) Bethesda System diagnostic categories. Native fit: MendeleyLBC and
+    BTM (raw labels already ARE Bethesda terms). Direct mapping (dataset
+    already encodes lesion grade): CPSMI2025.
 
   - MORPHOLOGICAL schema: for datasets labeled by cell morphology / dysplasia
     grade rather than a diagnostic category. Herlev and SIPaKMeD don't share
     a common fine-grained vocabulary with each other, so they're collapsed
     to a coarser Normal / Abnormal split, which both support without
     inventing correspondences the datasets don't actually encode.
-
-BTM isn't mapped yet -- its raw label set (first token of the `manifest.csv`
-`name` column) isn't in STRUCTURE.txt. Add its entry to whichever
-LABEL_MAPS dict once you know it (or both, if it has both kinds of labels).
 """
 
 from torch.utils.data import Dataset, ConcatDataset
@@ -78,6 +75,13 @@ BETHESDA_LABEL_MAPS = {
         'moderate dysplastic': 'HSIL',
         'severe dysplastic': 'HSIL',
         'carcinoma in situ': 'HSIL',
+    },
+    # Native fit, just like MendeleyLBC -- BTM's raw labels already ARE
+    # Bethesda terms (NIL is the same category as NILM, just abbreviated).
+    'BTMDataset': {
+        'NIL': 'NILM',
+        'LSIL': 'LSIL',
+        'HSIL': 'HSIL',
     },
 }
 
@@ -185,6 +189,7 @@ paths = {
     'herlev': '/data/Herlev Dataset',
     'mendeley': '/data/MendeleyLBC',
     'sipakmed': '/data/SIPaKMeD',
+    'btm': '/data/BTM',
 }
 
 # --- pretraining: every dataset, labels irrelevant ---
@@ -193,14 +198,16 @@ pretraining_ds = build_pretraining_dataset([
     HerlevDataset(paths['herlev'], task='pretraining', split='train', transform=pretrain_transform),
     MendeleyLBCDataset(paths['mendeley'], task='pretraining', split='train', transform=pretrain_transform),
     SIPaKMeDDataset(paths['sipakmed'], task='pretraining', split='train', transform=pretrain_transform),
+    BTMDataset(paths['btm'], task='pretraining', split='train', transform=pretrain_transform),
 ])
 
-# --- downstream, Bethesda schema: MendeleyLBC (native) + CPSMI2025 (mapped) ---
+# --- downstream, Bethesda schema: MendeleyLBC + BTM (native) + CPSMI2025 (mapped) ---
 # Add HerlevDataset(...) to this list too if you're OK with its extended mapping.
 bethesda_train = build_downstream_dataset(
     [
         MendeleyLBCDataset(paths['mendeley'], task='downstream', split='train', transform=eval_transform),
         CPSMI2025Dataset(paths['cpsmi2025'], task='downstream', split='train', transform=eval_transform),
+        BTMDataset(paths['btm'], task='downstream', split='train', transform=eval_transform),
     ],
     BETHESDA_LABEL_MAPS,
     BETHESDA_CLASSES,
@@ -209,6 +216,7 @@ bethesda_test = build_downstream_dataset(
     [
         MendeleyLBCDataset(paths['mendeley'], task='downstream', split='test', transform=eval_transform),
         CPSMI2025Dataset(paths['cpsmi2025'], task='downstream', split='test', transform=eval_transform),
+        BTMDataset(paths['btm'], task='downstream', split='test', transform=eval_transform),
     ],
     BETHESDA_LABEL_MAPS,
     BETHESDA_CLASSES,
