@@ -16,8 +16,16 @@ from utils import (
 )
 
 from torchmetrics import MetricCollection
-from torchmetrics.classification import MulticlassAUROC, MulticlassAveragePrecision, MulticlassRecall
-from transformers import ViTForImageClassification
+from torchmetrics.classification import (
+    MulticlassAUROC,
+    MulticlassAveragePrecision,
+    MulticlassRecall
+)
+from transformers import (
+    ViTForImageClassification,
+    ViTConfig,
+    ViTModel
+)
 from concat_datasets import *
 from pathlib import Path
 
@@ -84,18 +92,7 @@ morphological_test = build_downstream_dataset(
 )
 
 
-# # Model
-
-model = ViTForImageClassification.from_pretrained(
-    'google/vit-base-patch16-224',
-    num_labels=NUM_CLASSES,
-    ignore_mismatched_sizes=True
-)
-
-
-# # Training Config
-
-# ## DataLoaders
+# # DataLoaders Config
 
 pretraining_train_loader = None
 pretraining_valid_loader = None
@@ -103,7 +100,21 @@ downstream_train_loader = None
 downstream_valid_loader = None
 
 
-# ## Pretraining Config
+
+# # Pretraining
+
+# ## Config
+
+encoder = ViTModel.from_pretrained(
+    'google/vit-base-patch16-224',
+    add_pooling_layer=False
+)
+
+projector = nn.Sequential(
+    nn.Linear(768, 768),
+    nn.ReLU(),
+    nn.Linear(768, 128)
+)
 
 pretraining_args = dict(
     criterion = nn.CrossEntropyLoss(),
@@ -118,7 +129,41 @@ pretraining_args = dict(
 )
 
 
-# ## Downstream Config
+# ## Training
+
+for epoch in range(PRETRAINING_EPOCHS):
+    train_loss = pretraining.train_step(
+        encoder=encoder,
+        projector=projector,
+        loader=pretraining_train_loader,
+        criterion=pretraining_criterion,
+        optimizer=pretraining_optimizer,
+        scheduler=pretraining_scheduler,
+        device=device,
+        accumulation_steps=accumulation_steps,
+        autocast_dtype=autocast_dtype)
+    
+    valid_loss = pretraining.eval_step(
+        encoder=encoder,
+        projector=projector,
+        loader=pretraining_valid_loader,
+        criterion=pretraining_criterion,
+        metrics=pretraining_metrics,
+        device=device,
+        autocast_dtype=autocast_dtype)
+
+
+
+# # Downstream
+
+# ## Config
+
+clf_config = ViTConfig.from_pretrained(
+    'google/vit-base-patch16-224',
+    num_labels=NUM_CLASSES,
+)
+classifier = ViTForImageClassification(clf_config)
+classifier.vit.load_state_dict(encoder.state_dict())
 
 downstream_criterion = nn.CrossEntropyLoss()
 
@@ -135,14 +180,12 @@ downstream_metrics = MetricCollection(
 downstream_scheduler = None
 
 
-# # Training
+# ## Training
 
-# ## Pretraining
-
-for epoch in range(PRETRAINING_EPOCHS):
-    train_loss = pretraining.train_step(
-        model=model,
-        loader=pretraining_train_loader,
+for epoch in range(DOWNSTREAM_EPOCHS):
+    train_loss = downstream.train_step(
+        model=classifier,
+        loader=downstream_train_loader,
         criterion=downstream_criterion,
         optimizer=downstream_optimizer,
         scheduler=downstream_scheduler,
@@ -150,18 +193,11 @@ for epoch in range(PRETRAINING_EPOCHS):
         accumulation_steps=accumulation_steps,
         autocast_dtype=autocast_dtype)
     
-    valid_loss = pretraining.eval_step(
+    valid_loss = downstream.eval_step(
         model=model,
-        loader=pretraining_valid_loader,
+        loader=downstream_valid_loader,
         criterion=downstream_criterion,
         metrics=downstream_metrics,
         device=device,
         autocast_dtype=autocast_dtype)
-
-
-# ## Downstream
-
-for epoch in range(DOWNSTREAM_EPOCHS):
-    train_loss = downstream.train_step(model, downstream_train_loader)
-    valid_loss = downstream.eval_step(model, downstream_valid_loader)
 
