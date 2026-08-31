@@ -1,9 +1,11 @@
 # # Setup
 
+import glob
+import yaml
+
 import torch
 import torch.nn as nn
 
-import pretraining
 import downstream
 
 from log import logger  # local log.py with global logger
@@ -29,33 +31,39 @@ from transformers import (
 from concat_datasets import *
 from pathlib import Path
 
+configs = yaml.safe_load(open('configs.yaml'))
 
-PROJECT_ROOT = Path.home() / 'git/tcc'
-PROJECT_DATA = PROJECT_ROOT / 'data'
-PATH_CPSMI2025   = PROJECT_DATA / 'CPSMI2025/CPSMI2025'
-PATH_HERLEV      = PROJECT_DATA / 'Herlev Dataset'
-PATH_MENDELEYLBC = PROJECT_DATA / 'MendeleyLBC'
-PATH_SIPAKMED    = PROJECT_DATA / 'SIPaKMeD'
+PROJECT_ROOT_FROM_HOME = Path.home() / configs.get('PROJECT_ROOT_FROM_HOME')
+if not PROJECT_ROOT_FROM_HOME.exists():
+    PROJECT_ROOT_FROM_HOME = Path.home() / 'tcc'
+   
+PROJECT_DATA = configs['PROJECT_DATA']
+PATH_CPSMI2025 = configs['PATH_CPSMI2025']
+PATH_HERLEV = configs['PATH_HERLEV']
+PATH_MENDELEYLBC = configs['PATH_MENDELEYLBC']
+PATH_SIPAKMED = configs['PATH_SIPAKMED']
 
-PRETRAINING_EPOCHS = 3 # 50
-DOWNSTREAM_EPOCHS  = 3 # 50
+PATH_PRETRAINED = configs['PATH_PRETRAINED']
+PATH_FINETUNED = configs['PATH_FINETUNED']
 
-LR = 1e-4
-NUM_CLASSES = 4
+NUM_CLASSES = configs['DOWNSTREAM']['NUM_CLASSES']
+EPOCHS = configs['DOWNSTREAM']['EPOCHS']
+LR = configs['DOWNSTREAM']['LR']
 
 device = 'cuda' if torch.cuda.is_available else 'cpu'
 autocast_dtype = None
 accumulation_steps = 1
 
+PRETRAINED_MODEL = configs.get('PRETRAINED_MODEL', None)
+
+if PRETRAINED_MODEL is None:
+    candidates = glob.glob(PATH_PRETRAINED / '*.pt')
+    if len(candidates) == 0:
+        raise ValueError(f"No pretrained model found on '{str(PATH_PRETRAINED)}'")
+    PRETRAINED_MODEL = candidates[0]
+
 
 # # Datasets
-
-pretraining_ds = build_pretraining_dataset([
-    CPSMI2025Dataset(PATH_CPSMI2025, task='pretraining', split='train',),
-    HerlevDataset(PATH_HERLEV, task='pretraining', split='train',),
-    MendeleyLBCDataset(PATH_MENDELEYLBC, task='pretraining', split='train',),
-    SIPaKMeDDataset(PATH_SIPAKMED, task='pretraining', split='train',),
-])
 
 bethesda_train = build_downstream_dataset(
     [
@@ -94,81 +102,27 @@ morphological_test = build_downstream_dataset(
 
 # # DataLoaders Config
 
-pretraining_train_loader = None
-pretraining_valid_loader = None
 downstream_train_loader = None
 downstream_valid_loader = None
-
-
-
-# # Pretraining
-
-# ## Config
-
-encoder = ViTModel.from_pretrained(
-    'google/vit-base-patch16-224',
-    add_pooling_layer=False
-)
-
-projector = nn.Sequential(
-    nn.Linear(768, 768),
-    nn.ReLU(),
-    nn.Linear(768, 128)
-)
-
-pretraining_args = dict(
-    criterion = nn.CrossEntropyLoss(),
-    optimizer = torch.optim.Adamw(
-        {'params': model.parameters(), 'lr': LR}
-    ),
-    metrics = MetricCollection(
-        MulticlassAUROC(num_classes=NUM_CLASSES),
-        MulticlassAveragePrecision(num_classes=NUM_CLASSES),
-        MulticlassRecall(num_classes=NUM_CLASSES),
-    )
-)
-
-
-# ## Training
-
-for epoch in range(PRETRAINING_EPOCHS):
-    train_loss = pretraining.train_step(
-        encoder=encoder,
-        projector=projector,
-        loader=pretraining_train_loader,
-        criterion=pretraining_criterion,
-        optimizer=pretraining_optimizer,
-        scheduler=pretraining_scheduler,
-        device=device,
-        accumulation_steps=accumulation_steps,
-        autocast_dtype=autocast_dtype)
-    
-    valid_loss = pretraining.eval_step(
-        encoder=encoder,
-        projector=projector,
-        loader=pretraining_valid_loader,
-        criterion=pretraining_criterion,
-        metrics=pretraining_metrics,
-        device=device,
-        autocast_dtype=autocast_dtype)
-
 
 
 # # Downstream
 
 # ## Config
 
+pretrained_encoder = ViTModel.from_pretrained(PRETRAINED_MODEL)
+
 clf_config = ViTConfig.from_pretrained(
     'google/vit-base-patch16-224',
     num_labels=NUM_CLASSES,
 )
 classifier = ViTForImageClassification(clf_config)
-classifier.vit.load_state_dict(encoder.state_dict())
+classifier.vit.load_state_dict(pretrained_encoder.state_dict())
 
 downstream_criterion = nn.CrossEntropyLoss()
 
 downstream_optimizer = torch.optim.Adamw(
-    {'params': model.parameters(), 'lr': LR}
+    {'params': classifier.parameters(), 'lr': LR}
 )
 
 downstream_metrics = MetricCollection(
@@ -182,7 +136,7 @@ downstream_scheduler = None
 
 # ## Training
 
-for epoch in range(DOWNSTREAM_EPOCHS):
+for epoch in range(EPOCHS):
     train_loss = downstream.train_step(
         model=classifier,
         loader=downstream_train_loader,
@@ -194,7 +148,7 @@ for epoch in range(DOWNSTREAM_EPOCHS):
         autocast_dtype=autocast_dtype)
     
     valid_loss = downstream.eval_step(
-        model=model,
+        model=classifier,
         loader=downstream_valid_loader,
         criterion=downstream_criterion,
         metrics=downstream_metrics,
