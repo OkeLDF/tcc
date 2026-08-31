@@ -119,19 +119,19 @@ clf_config = ViTConfig.from_pretrained(
 classifier = ViTForImageClassification(clf_config)
 classifier.vit.load_state_dict(pretrained_encoder.state_dict())
 
-downstream_criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss()
 
-downstream_optimizer = torch.optim.Adamw(
+optimizer = torch.optim.Adamw(
     {'params': classifier.parameters(), 'lr': LR}
 )
 
-downstream_metrics = MetricCollection(
+metrics = MetricCollection(
     MulticlassAUROC(num_classes=NUM_CLASSES),
     MulticlassAveragePrecision(num_classes=NUM_CLASSES),
     MulticlassRecall(num_classes=NUM_CLASSES),
 )
 
-downstream_scheduler = None
+scheduler = None
 
 
 # ## Training
@@ -140,9 +140,9 @@ for epoch in range(EPOCHS):
     train_loss = downstream.train_step(
         model=classifier,
         loader=downstream_train_loader,
-        criterion=downstream_criterion,
-        optimizer=downstream_optimizer,
-        scheduler=downstream_scheduler,
+        criterion=criterion,
+        optimizer=optimizer,
+        scheduler=scheduler,
         device=device,
         accumulation_steps=accumulation_steps,
         autocast_dtype=autocast_dtype)
@@ -150,8 +150,8 @@ for epoch in range(EPOCHS):
     valid_loss = downstream.eval_step(
         model=classifier,
         loader=downstream_valid_loader,
-        criterion=downstream_criterion,
-        metrics=downstream_metrics,
+        criterion=criterion,
+        metrics=metrics,
         device=device,
         autocast_dtype=autocast_dtype)
 
