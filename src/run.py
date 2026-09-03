@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 
 def parse_arguments():
@@ -15,12 +13,22 @@ def parse_arguments():
 
     return a.parse_args()
 
-if __name__ == '__main__':
+
+def run():
     args = parse_arguments()
 
     if args.command == 'pretrain':
         print('PRETRAIN')
+        import step_pretrain
+        return
 
-    elif args.command == 'downstream':
+    if args.command == 'downstream':
         print('DOWNSTREAM')
-        print(args.schema)
+        import step_downstream
+        return
+
+    raise ValueError('Unknown command')
+
+
+if __name__ == '__main__':
+    run()
