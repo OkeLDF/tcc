@@ -29,7 +29,7 @@ configs = yaml.safe_load(open('configs.yaml'))
 PROJECT_ROOT_FROM_HOME = Path.home() / configs.get('PROJECT_ROOT_FROM_HOME')
 
 if not PROJECT_ROOT_FROM_HOME.exists():
-    PROJECT_ROOT_FROM_HOME = Path.home() / 'tcc'
+    PROJECT_ROOT_FROM_HOME = Path.home() / 'git/tcc'
 
 if not PROJECT_ROOT_FROM_HOME.exists():
     PROJECT_ROOT_FROM_HOME = Path('/mnt/data/home/otavio/UEPG/tcc')
@@ -45,8 +45,8 @@ PATH_PRETRAINED = PROJECT_ROOT_FROM_HOME / configs['PATH_PRETRAINED']
 FROZEN_EPOCHS = configs['PRETRAINING']['FROZEN_EPOCHS']
 UNFROZEN_EPOCHS = configs['PRETRAINING']['UNFROZEN_EPOCHS']
 
-FROZEN_LR = configs['PRETRAINING']['FROZEN_LR']
-UNFROZEN_LR = configs['PRETRAINING']['UNFROZEN_LR']
+FROZEN_LR = float(configs['PRETRAINING']['FROZEN_LR'])
+UNFROZEN_LR = float(configs['PRETRAINING']['UNFROZEN_LR'])
 
 device = 'cuda' if torch.cuda.is_available else 'cpu'
 autocast_dtype = None
@@ -86,10 +86,10 @@ projector = nn.Sequential(
 
 criterion = nn.CrossEntropyLoss()
 
-optimizer = torch.optim.Adamw(
+optimizer = torch.optim.AdamW([
     {'params': encoder.parameters(), 'lr': UNFROZEN_LR},
     {'params': projector.parameters(), 'lr': UNFROZEN_LR}
-)
+])
 
 metrics = None
 
@@ -105,7 +105,7 @@ for epoch in range(FROZEN_EPOCHS):
         encoder=encoder,
         projector=projector,
         loader=pretraining_train_loader,
-        criterion=criterion,
+        contrastive_loss=criterion,
         optimizer=optimizer,
         scheduler=scheduler,
         device=device,
@@ -116,7 +116,7 @@ for epoch in range(FROZEN_EPOCHS):
         encoder=encoder,
         projector=projector,
         loader=pretraining_valid_loader,
-        criterion=criterion,
+        contrastive_loss=criterion,
         metrics=metrics,
         device=device,
         autocast_dtype=autocast_dtype)

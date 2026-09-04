@@ -36,7 +36,7 @@ configs = yaml.safe_load(open('configs.yaml'))
 PROJECT_ROOT_FROM_HOME = Path.home() / configs.get('PROJECT_ROOT_FROM_HOME')
 
 if not PROJECT_ROOT_FROM_HOME.exists():
-    PROJECT_ROOT_FROM_HOME = Path.home() / 'tcc'
+    PROJECT_ROOT_FROM_HOME = Path.home() / 'git/tcc'
 
 if not PROJECT_ROOT_FROM_HOME.exists():
     PROJECT_ROOT_FROM_HOME = Path('/mnt/data/home/otavio/UEPG/tcc')
@@ -52,7 +52,7 @@ PATH_FINETUNED  = PROJECT_ROOT_FROM_HOME / configs['PATH_FINETUNED']
 
 NUM_CLASSES = configs['DOWNSTREAM']['NUM_CLASSES']
 EPOCHS = configs['DOWNSTREAM']['EPOCHS']
-LR = configs['DOWNSTREAM']['LR']
+LR = float(configs['DOWNSTREAM']['LR'])
 
 device = 'cuda' if torch.cuda.is_available else 'cpu'
 autocast_dtype = None
@@ -125,9 +125,9 @@ classifier.vit.load_state_dict(pretrained_encoder.state_dict())
 
 criterion = nn.CrossEntropyLoss()
 
-optimizer = torch.optim.Adamw(
+optimizer = torch.optim.AdamW([
     {'params': classifier.parameters(), 'lr': LR}
-)
+])
 
 metrics = MetricCollection(
     MulticlassAUROC(num_classes=NUM_CLASSES),
