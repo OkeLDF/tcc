@@ -137,6 +137,12 @@ metrics = MetricCollection(
 
 scheduler = None
 
+early_stopping = EarlyStopping(patience=5)
+
+scaler = None
+if autocast_dtype is not None:
+    scaler = torch.cuda.amp.GradScaler(enabled=(autocast_dtype == torch.float16))
+
 
 # ## Training
 
@@ -159,3 +165,6 @@ for epoch in range(EPOCHS):
         device=device,
         autocast_dtype=autocast_dtype)
 
+    if early_stopper.step(monitored):
+        print(f"\nEarly stopping at epoch {epoch}.")
+        break

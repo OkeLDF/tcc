@@ -34,7 +34,7 @@ class NTXentLoss(nn.Module):
 
 
 
-def train_step(encoder, projector, loader, contrastive_loss, optimizer, scheduler=None, device:str='cuda', accumulation_steps=1, autocast_dtype=None):
+def train_step(encoder, projector, loader, contrastive_loss, optimizer, scheduler=None, device:str='cuda', accumulation_steps=1, autocast_dtype=None, scaler=None):
     device_type = torch.device(device).type
     total_loss = torch.tensor(0.0, device=device)
     len_loader = len(loader)
@@ -53,25 +53,27 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
-                cls_embedding = encoder(pixel_values).last_hidden_state[:, 0, :]
+                cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
                 projection = projector(cls_embedding)
                 loss = contrastive_loss(projection)
+            scaler.scale(loss / accumulation_steps).backwards()
         else:
-            cls_embedding = encoder(pixel_values).last_hidden_state[:, 0, :]
+            cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
             projection = projector(cls_embedding)
             loss = contrastive_loss(projection)
+            (loss / accumulation_steps).backward()
 
         total_loss += loss.detach()
-        loss = loss / accumulation_steps
-        loss.backward()
 
         if it % accumulation_steps == 0 or it == len_loader:
-            nn.utils.clip_grad_norm_(
-                list(encoder.parameters()) + list(projector.parameters()),
-                max_norm=MAX_CLIP_NORM,
-                error_if_nonfinite=True
-            )
-            optimizer.step()
+            if autocast_dtype is not None:
+                scaler.unscale_(optimizer)
+                nn.utils.clip_grad_norm_(..., error_if_nonfinite=True)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                nn.utils.clip_grad_norm_(..., error_if_nonfinite=True)
+                optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
             if scheduler is not None:
@@ -86,29 +88,30 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
 
 
 @torch.inference_mode()
-def eval_step(model, loader, criterion, metrics=None, device:str='cuda', autocast_dtype=None):
+def eval_step(encoder, projector, loader, contrastive_loss, device: str = 'cuda', autocast_dtype=None):
     device_type = torch.device(device).type
     total_loss = torch.tensor(0.0, device=device)
     len_loader = len(loader)
-    model.eval()
+
+    encoder.eval()
+    projector.eval()
 
     for it, batch in enumerate(loader, 1):
-        pixel_values = batch['pixel_values'].to(device)
-        label = batch['label'].to(device)
+        aug_i = batch['augmented_i'].to(device)
+        aug_j = batch['augmented_j'].to(device)
+        pixel_values = torch.cat([aug_i, aug_j], dim=0)
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
-                logits = model(pixel_values).logits
-                loss = criterion(logits, label)
+                cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
+                projection = projector(cls_embedding)
+                loss = contrastive_loss(projection)
         else:
-            logits = model(pixel_values).logits
-            loss = criterion(logits, label)
+            cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
+            projection = projector(cls_embedding)
+            loss = contrastive_loss(projection)
 
-        total_loss += loss.detach()
-
-        if metrics is not None:
-            probs = logits.softmax(dim=-1)[:, 1].float()
-            metrics.update(probs, label)
+        total_loss += loss
 
         print_message(f'[ eval]: it {it}/{len_loader}', end='\r')
         if it % LOG_LOSS_EVERY == 0:

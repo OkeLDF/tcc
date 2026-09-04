@@ -91,11 +91,13 @@ optimizer = torch.optim.AdamW([
     {'params': projector.parameters(), 'lr': UNFROZEN_LR}
 ])
 
-metrics = None
-
 scheduler = None
 
 early_stopping = EarlyStopping(patience=5)
+
+scaler = None
+if autocast_dtype is not None:
+    scaler = torch.cuda.amp.GradScaler(enabled=(autocast_dtype == torch.float16))
 
 
 # ## Training
@@ -110,22 +112,18 @@ for epoch in range(FROZEN_EPOCHS):
         scheduler=scheduler,
         device=device,
         accumulation_steps=accumulation_steps,
-        autocast_dtype=autocast_dtype)
+        autocast_dtype=autocast_dtype,
+    )
 
-    metrics.reset()
-    
-    valid_loss = pretraining.eval_step(
+    valid_loss = pretraining.eval_step
         encoder=encoder,
         projector=projector,
         loader=pretraining_valid_loader,
         contrastive_loss=criterion,
-        metrics=metrics,
         device=device,
         autocast_dtype=autocast_dtype)
 
-    computed = metrics.compute()
-    
 
-    if early_stopper.step(monitored):
+    if early_stopper.step(valid_loss):
         print(f"\nEarly stopping at epoch {epoch}.")
         break

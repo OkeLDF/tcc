@@ -23,3 +23,9 @@ mkdir -p ./BTM
 cd ./BTM
 synapse get -r syn55262661
 cd ..
+
+# HiCervix
+mkdir -p ./HiCervix
+cd ./HiCervix
+zenodo_get -o . 11087263 -a $ZENODO_PAT
+cd ..
