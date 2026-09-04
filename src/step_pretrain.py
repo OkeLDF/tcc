@@ -111,6 +111,8 @@ for epoch in range(FROZEN_EPOCHS):
         device=device,
         accumulation_steps=accumulation_steps,
         autocast_dtype=autocast_dtype)
+
+    metrics.reset()
     
     valid_loss = pretraining.eval_step(
         encoder=encoder,
@@ -121,5 +123,9 @@ for epoch in range(FROZEN_EPOCHS):
         device=device,
         autocast_dtype=autocast_dtype)
 
-    if early_stopping.step():
-        continue
+    computed = metrics.compute()
+    
+
+    if early_stopper.step(monitored):
+        print(f"\nEarly stopping at epoch {epoch}.")
+        break
