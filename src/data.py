@@ -15,11 +15,14 @@ def assert_dataset_attributes(path, split, task):
     assert task in ('pretraining', 'downstream'), (
         f"`task` should be 'pretraining' or 'downstream', got: {task!r}."
     )
-    assert split in ('train', 'test'), (
-        f"`split` should be 'train' or 'test', got: {split!r}."
+    assert split in ('train', 'valid', 'test'), (
+        f"`split` should be 'train', 'valid', or 'test', got: {split!r}."
     )
     assert not (task == 'pretraining' and split == 'test'), (
-        "`split` can't be 'test' on unsupervised pretraining. Use split='train' with task='pretraining'."
+        "`split` can't be 'test' on unsupervised pretraining. Use split='train' or split='valid'."
+    )
+    assert not (task == 'downstream' and split == 'valid'), (
+        "`split='valid'` is reserved for unsupervised pretraining."
     )
     assert Path(path).exists(), f"Path {path!r} does not exist."
 
@@ -45,13 +48,18 @@ class BaseCervicalCytologyDataset(Dataset):
     splitting, image loading -- is handled here.
 
     Split contract (stratified by label, seeded with RANDOM_STATE=42):
-        task='pretraining', split='train'   -> 50% of all samples
-        task='downstream',  split='train'   -> 75% of the other 50%
-        task='downstream',  split='test'    -> 25% of the other 50%
+        task='pretraining', split='train'   -> SimCLR training partition
+        task='pretraining', split='valid'   -> SimCLR validation partition
+        task='downstream',  split='train'   -> the same training partition
+        task='downstream',  split='test'    -> held-out test partition
+
+    This is inductive self-supervised learning: pretraining and supervised
+    finetuning may see the same training images, but the test images remain
+    unseen until final evaluation. Labels are never returned for pretraining.
     """
 
     def __init__(self, path, split='train', task='pretraining', transform=None,
-                 downstream_size=0.5, test_size=0.25):
+                 test_size=0.2, validation_size=0.1):
         super().__init__()
 
         assert_dataset_attributes(path=path, split=split, task=task)
@@ -68,35 +76,34 @@ class BaseCervicalCytologyDataset(Dataset):
         self.classes = np.unique(self.samples[:, 1])
         self.class_to_idx = {c: i for i, c in enumerate(self.classes.tolist())}
 
-        self.samples = self._apply_split(downstream_size, test_size)
+        self.samples = self._apply_split(test_size, validation_size)
 
     def _collect_samples(self):
         """Return a list of (image_path: str, label: str) tuples for every sample."""
         raise NotImplementedError
 
-    def _apply_split(self, downstream_size, test_size):
+    def _apply_split(self, test_size, validation_size):
         labels = self.samples[:, 1]
 
-        pretraining_idx, downstream_idx = train_test_split(
+        train_idx, test_idx = train_test_split(
             np.arange(len(self.samples)),
-            test_size=downstream_size,
+            test_size=test_size,
             stratify=labels,
             shuffle=True,
             random_state=RANDOM_STATE,
         )
 
-        if self.task == 'pretraining':
-            return self.samples[pretraining_idx]
+        if self.task == 'downstream':
+            return self.samples[train_idx] if self.split == 'train' else self.samples[test_idx]
 
-        downstream_samples = self.samples[downstream_idx]
-        train_idx, test_idx = train_test_split(
-            np.arange(len(downstream_samples)),
-            test_size=test_size,
-            stratify=downstream_samples[:, 1],
+        ssl_train_idx, ssl_valid_idx = train_test_split(
+            train_idx,
+            test_size=validation_size,
+            stratify=labels[train_idx],
             shuffle=True,
             random_state=RANDOM_STATE,
         )
-        return downstream_samples[train_idx] if self.split == 'train' else downstream_samples[test_idx]
+        return self.samples[ssl_train_idx] if self.split == 'train' else self.samples[ssl_valid_idx]
 
     def __len__(self):
         return len(self.samples)
@@ -109,13 +116,15 @@ class BaseCervicalCytologyDataset(Dataset):
             raise FileNotFoundError(f"Could not read image at {img_path!r}.")
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        if self.transform is not None:
-            image = self.transform(image)
+        if self.transform is None:
+            raise RuntimeError('A transform is required to produce model-ready tensors.')
 
-        return {
-            'pixel_values': image,
-            'label': self.class_to_idx[label],
-        }
+        transformed = self.transform(image)
+        if self.task == 'pretraining':
+            aug_i, aug_j = transformed
+            return {'augmented_i': aug_i, 'augmented_j': aug_j}
+
+        return {'pixel_values': transformed, 'label': self.class_to_idx[label]}
 
 
 class CPSMI2025Dataset(BaseCervicalCytologyDataset):
@@ -126,15 +135,15 @@ class CPSMI2025Dataset(BaseCervicalCytologyDataset):
 
 
     def __init__(self, path, use_first_class_level=False, split='train', task='pretraining',
-                 transform=None, downstream_size=0.5, test_size=0.25):
+                 transform=None, test_size=0.2, validation_size=0.1):
         self.use_first_class_level = use_first_class_level
         super().__init__(
             path,
             split=split,
             task=task,
             transform=transform,
-            downstream_size=downstream_size,
-            test_size=test_size
+            test_size=test_size,
+            validation_size=validation_size,
         )
 
     def _collect_samples(self):
@@ -152,10 +161,9 @@ class HerlevDataset(BaseCervicalCytologyDataset):
     """
     Layout: <path>/{train,test}/<class>/*.bmp
 
-    The dataset ships with its own train/test folders, but we ignore that
-    split and pool every image together so our own pretraining/downstream
-    split (and downstream train/test split) can be applied consistently
-    across all datasets.
+    The dataset's supplied split is preserved: images under ``train`` feed
+    pretraining and downstream training, while images under ``test`` are used
+    only for downstream evaluation.
     """
 
     def _collect_samples(self):
@@ -166,6 +174,28 @@ class HerlevDataset(BaseCervicalCytologyDataset):
                 for img_path in list_images(class_dir):
                     samples.append((str(img_path), label))
         return samples
+
+    def _apply_split(self, test_size, validation_size):
+        del test_size
+        train_samples = [
+            sample for sample in self.samples
+            if Path(sample[0]).parents[1].name == 'train'
+        ]
+        if self.task == 'pretraining':
+            labels = np.array(train_samples)[:, 1]
+            train_idx, valid_idx = train_test_split(
+                np.arange(len(train_samples)), test_size=validation_size,
+                stratify=labels, shuffle=True, random_state=RANDOM_STATE,
+            )
+            selected = np.array(train_samples)[train_idx if self.split == 'train' else valid_idx]
+        else:
+            selected_folder = self.split
+            selected = [
+                sample for sample in self.samples
+                if Path(sample[0]).parents[1].name == selected_folder
+            ]
+        assert len(selected), f'No samples found in Herlev {self.split!r} split.'
+        return np.array(selected)
 
 
 class MendeleyLBCDataset(BaseCervicalCytologyDataset):

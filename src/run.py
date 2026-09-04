@@ -19,12 +19,14 @@ def run():
 
     if args.command == 'pretrain':
         print('PRETRAIN')
-        import step_pretrain
+        from step_pretrain import main
+        main()
         return
 
     if args.command == 'downstream':
         print('DOWNSTREAM')
-        import step_downstream
+        from step_downstream import main
+        main(args.schema)
         return
 
     raise ValueError('Unknown command')

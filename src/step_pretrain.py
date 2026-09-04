@@ -1,129 +1,141 @@
-# # Setup
+from pathlib import Path
 
-import yaml
-
+import pandas as pd
 import torch
 import torch.nn as nn
+import yaml
+
+from torch.utils.data import DataLoader
+from transformers import ViTModel
 
 import pretraining
 
-from log import logger  # local log.py with global logger
-from utils import (
-    print_message,
-    time_diff,
-    epoch_stats,
-    save_checkpoint,
-    EarlyStopping
+from concat_datasets import (
+    BTMDataset,
+    CPSMI2025Dataset,
+    HerlevDataset,
+    MendeleyLBCDataset,
+    SIPaKMeDDataset,
+    build_pretraining_dataset,
 )
-
-from torchmetrics import MetricCollection
-
-from transformers import (
-    ViTModel
-)
-from concat_datasets import *
-from pathlib import Path
-
-configs = yaml.safe_load(open('configs.yaml'))
-
-PROJECT_ROOT_FROM_HOME = Path.home() / configs.get('PROJECT_ROOT_FROM_HOME')
-
-if not PROJECT_ROOT_FROM_HOME.exists():
-    PROJECT_ROOT_FROM_HOME = Path.home() / 'git/tcc'
-
-if not PROJECT_ROOT_FROM_HOME.exists():
-    PROJECT_ROOT_FROM_HOME = Path('/mnt/data/home/otavio/UEPG/tcc')
-   
-PROJECT_DATA     = PROJECT_ROOT_FROM_HOME / configs['PROJECT_DATA']
-PATH_CPSMI2025   = PROJECT_DATA / configs['PATH_CPSMI2025']
-PATH_HERLEV      = PROJECT_DATA / configs['PATH_HERLEV']
-PATH_MENDELEYLBC = PROJECT_DATA / configs['PATH_MENDELEYLBC']
-PATH_SIPAKMED    = PROJECT_DATA / configs['PATH_SIPAKMED']
-
-PATH_PRETRAINED = PROJECT_ROOT_FROM_HOME / configs['PATH_PRETRAINED']
-
-FROZEN_EPOCHS = configs['PRETRAINING']['FROZEN_EPOCHS']
-UNFROZEN_EPOCHS = configs['PRETRAINING']['UNFROZEN_EPOCHS']
-
-FROZEN_LR = float(configs['PRETRAINING']['FROZEN_LR'])
-UNFROZEN_LR = float(configs['PRETRAINING']['UNFROZEN_LR'])
-
-device = 'cuda' if torch.cuda.is_available else 'cpu'
-autocast_dtype = None
-accumulation_steps = 1
+from image_transforms import SimCLRTransform
+from log import logger
+from utils import EarlyStopping, epoch_stats, save_checkpoint
 
 
-# # Datasets
-
-pretraining_ds = build_pretraining_dataset([
-    CPSMI2025Dataset(PATH_CPSMI2025, task='pretraining', split='train',),
-    HerlevDataset(PATH_HERLEV, task='pretraining', split='train',),
-    MendeleyLBCDataset(PATH_MENDELEYLBC, task='pretraining', split='train',),
-    SIPaKMeDDataset(PATH_SIPAKMED, task='pretraining', split='train',),
-])
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-# # DataLoaders Config
-
-pretraining_train_loader = None
-pretraining_valid_loader = None
-
-
-# # Pretraining
-
-# ## Config
-
-encoder = ViTModel.from_pretrained(
-    'google/vit-base-patch16-224',
-    add_pooling_layer=False
-)
-
-projector = nn.Sequential(
-    nn.Linear(768, 768),
-    nn.ReLU(),
-    nn.Linear(768, 128)
-)
-
-criterion = nn.CrossEntropyLoss()
-
-optimizer = torch.optim.AdamW([
-    {'params': encoder.parameters(), 'lr': UNFROZEN_LR},
-    {'params': projector.parameters(), 'lr': UNFROZEN_LR}
-])
-
-scheduler = None
-
-early_stopping = EarlyStopping(patience=5)
-
-scaler = None
-if autocast_dtype is not None:
-    scaler = torch.cuda.amp.GradScaler(enabled=(autocast_dtype == torch.float16))
+def _set_trainable(module, enabled):
+    for parameter in module.parameters():
+        parameter.requires_grad = enabled
 
 
-# ## Training
+def _build_dataset(split, data_root, configs, transform, test_size, validation_size):
+    return build_pretraining_dataset([
+        CPSMI2025Dataset(
+            data_root / configs['PATH_CPSMI2025'], task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        ),
+        HerlevDataset(
+            data_root / configs['PATH_HERLEV'], task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        ),
+        MendeleyLBCDataset(
+            data_root / configs['PATH_MENDELEYLBC'], task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        ),
+        SIPaKMeDDataset(
+            data_root / configs['PATH_SIPAKMED'], task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        ),
+        BTMDataset(
+            data_root / 'BTM', task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        ),
+    ])
 
-for epoch in range(FROZEN_EPOCHS):
-    train_loss = pretraining.train_step(
-        encoder=encoder,
-        projector=projector,
-        loader=pretraining_train_loader,
-        contrastive_loss=criterion,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        device=device,
-        accumulation_steps=accumulation_steps,
-        autocast_dtype=autocast_dtype,
+
+def main():
+    configs = yaml.safe_load((Path(__file__).with_name('configs.yaml')).read_text())
+    data_root = PROJECT_ROOT / configs['PROJECT_DATA']
+    log_root = PROJECT_ROOT / configs['PROJECT_LOG']
+    log_root.mkdir(parents=True, exist_ok=True)
+
+    test_size = float(configs['DATA']['TEST_SIZE'])
+    validation_size = float(configs['PRETRAINING']['VALIDATION_SIZE'])
+    batch_size = int(configs['DATA']['BATCH_SIZE'])
+    num_workers = int(configs['DATA']['NUM_WORKERS'])
+    save_every = int(configs['PRETRAINING']['SAVE_EVERY'])
+
+    transform = SimCLRTransform()
+    train_dataset = _build_dataset('train', data_root, configs, transform, test_size, validation_size)
+    valid_dataset = _build_dataset('valid', data_root, configs, transform, test_size, validation_size)
+
+    loader_options = dict(
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
+        persistent_workers=num_workers > 0,
     )
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **loader_options)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, **loader_options)
 
-    valid_loss = pretraining.eval_step
-        encoder=encoder,
-        projector=projector,
-        loader=pretraining_valid_loader,
-        contrastive_loss=criterion,
-        device=device,
-        autocast_dtype=autocast_dtype)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logger.info(f'Running pretraining on {device}')
+
+    encoder = ViTModel.from_pretrained('google/vit-base-patch16-224', add_pooling_layer=False).to(device)
+    projector = nn.Sequential(nn.Linear(768, 768), nn.ReLU(), nn.Linear(768, 128)).to(device)
+    criterion = pretraining.NTXentLoss(float(configs['PRETRAINING']['TEMPERATURE']))
+
+    output_dir = PROJECT_ROOT / configs['PATH_PRETRAINED']
+    checkpoint_dir = output_dir / 'checkpoint'
+    history = []
+    early_stopping = EarlyStopping(patience=5)
+    phases = [
+        ('frozen', int(configs['PRETRAINING']['FROZEN_EPOCHS']), float(configs['PRETRAINING']['FROZEN_LR']), False),
+        ('unfrozen', int(configs['PRETRAINING']['UNFROZEN_EPOCHS']), float(configs['PRETRAINING']['UNFROZEN_LR']), True),
+    ]
+
+    stop_training = False
+    completed_epochs = 0
+    for phase, epochs, learning_rate, encoder_trainable in phases:
+        if epochs == 0:
+            continue
+
+        _set_trainable(encoder, encoder_trainable)
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, list(encoder.parameters()) + list(projector.parameters())),
+            lr=learning_rate,
+        )
+
+        for epoch in range(epochs):
+            train_loss = pretraining.train_step(encoder, projector, train_loader, criterion, optimizer, device=device)
+            eval_loss = pretraining.eval_step(encoder, projector, valid_loader, criterion, device=device)
+
+            result = {
+                'epoch': epoch,
+                'phase': phase,
+                'train_loss': train_loss,
+                'eval_loss': eval_loss,
+            }
+            epoch_stats(epoch, result)
+            history.append(result)
+
+            if save_every != 0 and epoch % save_every == 0:
+                pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
+                save_checkpoint(encoder, optimizer, None, epoch, result, checkpoint_dir / 'last_vit_pretrained_encoder.pt')
+
+            if early_stopping.step(eval_loss):
+                logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
+                stop_training = True
+                break
+
+        if stop_training:
+            break
+
+    pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
+    save_checkpoint(encoder, optimizer, None, completed_epochs, history[-1] if history else {}, output_dir / 'vit_pretrained_encoder.pt')
 
 
-    if early_stopper.step(valid_loss):
-        print(f"\nEarly stopping at epoch {epoch}.")
-        break
+if __name__ == '__main__':
+    main()

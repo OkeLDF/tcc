@@ -1,3 +1,5 @@
+from itertools import chain
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -56,7 +58,7 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
                 cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
                 projection = projector(cls_embedding)
                 loss = contrastive_loss(projection)
-            scaler.scale(loss / accumulation_steps).backwards()
+            scaler.scale(loss / accumulation_steps).backward()
         else:
             cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
             projection = projector(cls_embedding)
@@ -68,11 +70,19 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
         if it % accumulation_steps == 0 or it == len_loader:
             if autocast_dtype is not None:
                 scaler.unscale_(optimizer)
-                nn.utils.clip_grad_norm_(..., error_if_nonfinite=True)
+                nn.utils.clip_grad_norm_(
+                    chain(encoder.parameters(), projector.parameters()),
+                    max_norm=MAX_CLIP_NORM,
+                    error_if_nonfinite=True,
+                )
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                nn.utils.clip_grad_norm_(..., error_if_nonfinite=True)
+                nn.utils.clip_grad_norm_(
+                    chain(encoder.parameters(), projector.parameters()),
+                    max_norm=MAX_CLIP_NORM,
+                    error_if_nonfinite=True,
+                )
                 optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 

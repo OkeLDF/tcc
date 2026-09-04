@@ -74,7 +74,7 @@ def eval_step(model, loader, criterion, metrics=None, device:str='cuda', autocas
         total_loss += loss.detach()
 
         if metrics is not None:
-            probs = logits.softmax(dim=-1)[:, 1].float()
+            probs = logits.softmax(dim=-1).float()
             metrics.update(probs, label)
 
         print_message(f'[ eval]: it {it}/{len_loader}', end='\r')

@@ -1,5 +1,6 @@
 import os
 import time
+from numbers import Number
 import torch
 from pathlib import Path
 
@@ -27,17 +28,19 @@ def epoch_stats(epoch: int, history_entry: dict):
         for name, metric in history_entry.items()
     ])
 
-    logger.log(log_string + metrics_string)
+    logger.info(log_string + metrics_string)
 
 
 def save_checkpoint(model, optimizer, scheduler, epoch: int, metrics: dict, path: Path) -> None:
-    tmp = Path(path).with_suffix(".pt.tmp")
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".pt.tmp")
     torch.save({
         "epoch": epoch,
         "model_state": model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
-        "scheduler_state": scheduler.state_dict(),
-        "metrics": {k: float(v) for k, v in metrics.items()},
+        "scheduler_state": scheduler.state_dict() if scheduler is not None else None,
+        "metrics": {k: float(v) for k, v in metrics.items() if isinstance(v, Number)},
     }, tmp)
     os.replace(tmp, path)
     print(f"  checkpoint → {path}")
