@@ -34,8 +34,12 @@ from pathlib import Path
 configs = yaml.safe_load(open('configs.yaml'))
 
 PROJECT_ROOT_FROM_HOME = Path.home() / configs.get('PROJECT_ROOT_FROM_HOME')
+
 if not PROJECT_ROOT_FROM_HOME.exists():
     PROJECT_ROOT_FROM_HOME = Path.home() / 'tcc'
+
+if not PROJECT_ROOT_FROM_HOME.exists():
+    PROJECT_ROOT_FROM_HOME = Path('/mnt/data/home/otavio/UEPG/tcc')
    
 PROJECT_DATA = configs['PROJECT_DATA']
 PATH_CPSMI2025 = configs['PATH_CPSMI2025']
