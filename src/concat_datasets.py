@@ -109,6 +109,15 @@ BETHESDA_LABEL_MAPS = {
         'HCG': None,
         'AGC-NOS': None,
         'AGC-FN': None,
+        # Generic leaf labels for rows where level_2 wasn't resolved to a
+        # subtype (HiCervixDataset falls back to `class_name`, which equals
+        # level_1 for these rows). 'AGC' generic is confirmed to occur in
+        # the data; 'ASC' generic is excluded defensively in case it occurs
+        # too -- neither has an unambiguous Bethesda equivalent (AGC's NOS/FN
+        # subtypes are already excluded above; ASC's US/H subtype changes
+        # clinical management, so it can't be guessed).
+        'AGC': None,
+        'ASC': None,
     },
 }
 

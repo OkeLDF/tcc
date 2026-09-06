@@ -1,3 +1,5 @@
+import warnings
+
 import cv2
 import numpy as np
 import pandas as pd
@@ -265,16 +267,28 @@ class HiCervixDataset(BaseCervicalCytologyDataset):
         <path>/train.csv, <path>/val.csv, <path>/test.csv
         <path>/train/<image_name>, <path>/val/<image_name>, <path>/test/<image_name>
 
-    ``label_level=1`` produces a binary morphology target: ``normal`` for
-    ``negative`` and ``microbe`` cases, and ``abnormal`` for ``ASC`` and
-    ``AGC`` cases. ``label_level=2`` returns HiCervix's native level-2
-    Bethesda-style category names (for example, ``ASC-US``, ``LSIL``,
-    ``HSIL``, ``SCC``, and ``ADC``). Rows with no level-2 annotation are
-    excluded only for supervised level-2 use.
+    ``label_level=1`` uses HiCervix's own coarse ``level_1`` field
+    (``negative``/``microbe``/``ASC``/``AGC``) collapsed into a binary
+    ``normal``/``abnormal`` target. This binary split is fully determined by
+    HiCervix's own hierarchy (level_1 has exactly these 4 branches, and the
+    normal-vs-abnormal assignment isn't a judgment call), so it's baked in
+    here rather than left to concat_datasets.py.
+
+    ``label_level=2`` returns the *raw* ``level_2`` value unchanged (falling
+    back to ``class_name`` -- which equals whichever level is deepest for
+    that row -- when ``level_2`` is missing, e.g. generic ``'AGC'`` leaf rows
+    with no resolved NOS/FN subtype). Unlike level_1, this is NOT collapsed
+    onto Bethesda terms here: which level_2 categories count as NILM, which
+    get excluded, etc. is a shared-schema policy decision that belongs in
+    concat_datasets.py's BETHESDA_LABEL_MAPS (where it's visible and easy to
+    revise), not baked into the loader.
 
     The dataset's official partitions are never randomly repartitioned:
     ``split='train'``, ``'valid'``, and ``'test'`` select ``train/``,
-    ``val/``, and ``test/`` respectively.
+    ``val/``, and ``test/`` respectively -- ``test_size``/``validation_size``
+    are accepted only for interface compatibility with the other datasets
+    and are ignored (a warning is raised if you pass non-default values, so
+    this doesn't fail silently).
     """
 
     LEVEL_1_BINARY_MAP = {
@@ -283,12 +297,18 @@ class HiCervixDataset(BaseCervicalCytologyDataset):
         'ASC': 'abnormal',
         'AGC': 'abnormal',
     }
+
     SPLIT_TO_SOURCE = {'train': 'train', 'valid': 'val', 'test': 'test'}
 
     def __init__(self, path, label_level=1, split='train', task='pretraining',
                  transform=None, test_size=0.2, validation_size=0.1):
         assert label_level in (1, 2), f'`label_level` should be 1 or 2, got: {label_level!r}.'
         self.label_level = label_level
+        if test_size != 0.2 or validation_size != 0.1:
+            warnings.warn(
+                'HiCervixDataset always uses its own official train/val/test '
+                'partitions; the `test_size`/`validation_size` you passed are ignored.'
+            )
         super().__init__(
             path,
             split=split,
@@ -312,7 +332,7 @@ class HiCervixDataset(BaseCervicalCytologyDataset):
             )
 
             annotations = pd.read_csv(csv_path)
-            required_columns = {'image_name', 'level_1', 'level_2'}
+            required_columns = {'image_name', 'class_name', 'level_1', 'level_2'}
             missing_columns = required_columns - set(annotations.columns)
             assert not missing_columns, (
                 f'{str(csv_path)!r} is missing required columns: {sorted(missing_columns)}.'
@@ -326,17 +346,18 @@ class HiCervixDataset(BaseCervicalCytologyDataset):
 
                 if self.task == 'pretraining':
                     label = 'unlabeled'
+
                 elif self.label_level == 1:
                     try:
                         label = self.LEVEL_1_BINARY_MAP[row.level_1]
                     except KeyError as error:
                         raise ValueError(
-                            f'Unknown HiCervix level-1 label {row.level_1!r} in {str(csv_path)!r}.'
+                            f'Unknown HiCervix level-1 label {row.level_1!r} in {str(csv_path)!r}. '
+                            f'Add it to LEVEL_1_BINARY_MAP.'
                         ) from error
-                else:
-                    if pd.isna(row.level_2):
-                        continue
-                    label = row.level_2
+
+                else:  # label_level == 2, raw pass-through
+                    label = row.class_name if pd.isna(row.level_2) else row.level_2
 
                 samples.append((str(image_path), label))
 
