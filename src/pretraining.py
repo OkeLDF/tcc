@@ -53,7 +53,7 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
         aug_j = batch['augmented_j'].to(device)
         pixel_values = torch.cat([aug_i, aug_j], dim=0)
 
-        if autocast_dtype is not None:
+        if autocast_dtype == torch.float16:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
                 cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
                 projection = projector(cls_embedding)
@@ -68,7 +68,7 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
         total_loss += loss.detach()
 
         if it % accumulation_steps == 0 or it == len_loader:
-            if autocast_dtype is not None:
+            if autocast_dtype == torch.float16:
                 scaler.unscale_(optimizer)
                 nn.utils.clip_grad_norm_(
                     chain(encoder.parameters(), projector.parameters()),

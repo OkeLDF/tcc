@@ -73,8 +73,8 @@ def main(schema='bethesda'):
     data_root = PROJECT_ROOT / configs['PROJECT_DATA']
     log_root = PROJECT_ROOT / configs['PROJECT_LOG']
     log_root.mkdir(parents=True, exist_ok=True)
-    batch_size = int(configs['DATA']['BATCH_SIZE'])
     num_workers = int(configs['DATA']['NUM_WORKERS'])
+    batch_size = int(configs['DOWNSTREAM']['BATCH_SIZE'])
     save_every = int(configs['DOWNSTREAM']['SAVE_EVERY'])
     output_dir = PROJECT_ROOT / configs['PATH_FINETUNED'] / schema
     output_dir.mkdir(parents=True, exist_ok=True)

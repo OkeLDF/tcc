@@ -69,8 +69,8 @@ def main():
 
     test_size = float(configs['DATA']['TEST_SIZE'])
     validation_size = float(configs['PRETRAINING']['VALIDATION_SIZE'])
-    batch_size = int(configs['DATA']['BATCH_SIZE'])
     num_workers = int(configs['DATA']['NUM_WORKERS'])
+    batch_size = int(configs['PRETRAINING']['BATCH_SIZE'])
     save_every = int(configs['PRETRAINING']['SAVE_EVERY'])
 
     transform = SimCLRTransform()
@@ -100,6 +100,9 @@ def main():
         ('frozen', int(configs['PRETRAINING']['FROZEN_EPOCHS']), float(configs['PRETRAINING']['FROZEN_LR']), False),
         ('unfrozen', int(configs['PRETRAINING']['UNFROZEN_EPOCHS']), float(configs['PRETRAINING']['UNFROZEN_LR']), True),
     ]
+    
+    autocast_dtype = torch.bfloat16
+    scaler = None
 
     stop_training = False
     completed_epochs = 0
@@ -114,7 +117,8 @@ def main():
         )
 
         for epoch in range(epochs):
-            train_loss = pretraining.train_step(encoder, projector, train_loader, criterion, optimizer, device=device)
+            train_loss = pretraining.train_step(
+                encoder, projector, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
             eval_loss = pretraining.eval_step(encoder, projector, valid_loader, criterion, device=device)
 
             result = {
