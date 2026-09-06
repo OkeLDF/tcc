@@ -55,3 +55,21 @@ LSIL ({i}).JPG
 HSIL ({i}).JPG
 manifest.csv
 SYNAPSE_METADATA_MANIFEST.tsv
+
+HiCervix:
+train/
+test/
+val/
+
+HiCervix note:
+labels are on *.csv files, and disposed on 3 levels:
+    level 1: 
+    ['AGC', 'ASC', 'negative', 'microbe']
+
+    level 2:
+    ['AGC-NOS', 'ASC-US', 'SCC', 'HCG', 'Normal', 'Atrophy', 'HSV',
+     'AGC-FN', 'ACTINO', 'MPC', 'HSIL', 'EMC', nan, 'RPC', 'ECC',
+     'ASC-H', 'ADC', 'LSIL', 'TRI', 'PG', 'FUNGI', 'CC']
+
+    level 3:
+    [nan, 'AGC-ECC-NOS', 'AGC-EMC-NOS', 'ADC-ECC', 'ADC-EMC']

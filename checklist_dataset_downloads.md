@@ -1,6 +1,7 @@
 - [x] SIPaKMeD
 - [x] CPSMI2025
 - [x] Herlev
-- [ ] HiCervix
+- [x] HiCervix
 - [x] Mendeley LBC
 - [x] BMT
+- [x] LUAC (private)

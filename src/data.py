@@ -255,3 +255,105 @@ class BTMDataset(BaseCervicalCytologyDataset):
             (str(self.path / row.path), row.label)
             for row in manifest.itertuples()
         ]
+
+
+class HiCervixDataset(BaseCervicalCytologyDataset):
+    """HiCervix dataset with its supplied train/validation/test partitions.
+
+    Layout::
+
+        <path>/train.csv, <path>/val.csv, <path>/test.csv
+        <path>/train/<image_name>, <path>/val/<image_name>, <path>/test/<image_name>
+
+    ``label_level=1`` produces a binary morphology target: ``normal`` for
+    ``negative`` and ``microbe`` cases, and ``abnormal`` for ``ASC`` and
+    ``AGC`` cases. ``label_level=2`` returns HiCervix's native level-2
+    Bethesda-style category names (for example, ``ASC-US``, ``LSIL``,
+    ``HSIL``, ``SCC``, and ``ADC``). Rows with no level-2 annotation are
+    excluded only for supervised level-2 use.
+
+    The dataset's official partitions are never randomly repartitioned:
+    ``split='train'``, ``'valid'``, and ``'test'`` select ``train/``,
+    ``val/``, and ``test/`` respectively.
+    """
+
+    LEVEL_1_BINARY_MAP = {
+        'negative': 'normal',
+        'microbe': 'normal',
+        'ASC': 'abnormal',
+        'AGC': 'abnormal',
+    }
+    SPLIT_TO_SOURCE = {'train': 'train', 'valid': 'val', 'test': 'test'}
+
+    def __init__(self, path, label_level=1, split='train', task='pretraining',
+                 transform=None, test_size=0.2, validation_size=0.1):
+        assert label_level in (1, 2), f'`label_level` should be 1 or 2, got: {label_level!r}.'
+        self.label_level = label_level
+        super().__init__(
+            path,
+            split=split,
+            task=task,
+            transform=transform,
+            test_size=test_size,
+            validation_size=validation_size,
+        )
+
+    def _collect_samples(self):
+        samples = []
+        missing_images = []
+
+        for source_split in self.SPLIT_TO_SOURCE.values():
+            csv_path = self.path / f'{source_split}.csv'
+            image_dir = self.path / source_split
+            assert csv_path.exists(), f'Expected annotation file {str(csv_path)!r} to exist.'
+            assert image_dir.is_dir(), (
+                f'Expected image directory {str(image_dir)!r} to exist. '
+                f'Extract {source_split}.zip into {str(self.path)!r} first.'
+            )
+
+            annotations = pd.read_csv(csv_path)
+            required_columns = {'image_name', 'level_1', 'level_2'}
+            missing_columns = required_columns - set(annotations.columns)
+            assert not missing_columns, (
+                f'{str(csv_path)!r} is missing required columns: {sorted(missing_columns)}.'
+            )
+
+            for row in annotations.itertuples(index=False):
+                image_path = image_dir / row.image_name
+                if not image_path.is_file():
+                    missing_images.append(image_path)
+                    continue
+
+                if self.task == 'pretraining':
+                    label = 'unlabeled'
+                elif self.label_level == 1:
+                    try:
+                        label = self.LEVEL_1_BINARY_MAP[row.level_1]
+                    except KeyError as error:
+                        raise ValueError(
+                            f'Unknown HiCervix level-1 label {row.level_1!r} in {str(csv_path)!r}.'
+                        ) from error
+                else:
+                    if pd.isna(row.level_2):
+                        continue
+                    label = row.level_2
+
+                samples.append((str(image_path), label))
+
+        if missing_images:
+            examples = ', '.join(str(path) for path in missing_images[:3])
+            raise FileNotFoundError(
+                f'HiCervix is incomplete: {len(missing_images)} CSV-referenced images are missing. '
+                f'Examples: {examples}'
+            )
+        return samples
+
+    def _apply_split(self, test_size, validation_size):
+        del test_size, validation_size
+        source_split = self.SPLIT_TO_SOURCE[self.split]
+        selected = [
+            sample for sample in self.samples
+            if Path(sample[0]).parent.name == source_split
+        ]
+        assert selected, f'No samples found in HiCervix {source_split!r} partition.'
+        return np.array(selected)

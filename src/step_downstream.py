@@ -13,7 +13,7 @@ from transformers import ViTConfig, ViTForImageClassification, ViTModel
 import downstream
 
 from concat_datasets import (BETHESDA_CLASSES, BETHESDA_LABEL_MAPS, MORPHOLOGICAL_CLASSES,
-    MORPHOLOGICAL_LABEL_MAPS, BTMDataset, CPSMI2025Dataset, HerlevDataset, MendeleyLBCDataset,
+    MORPHOLOGICAL_LABEL_MAPS, BTMDataset, CPSMI2025Dataset, HerlevDataset, HiCervixDataset, MendeleyLBCDataset,
     SIPaKMeDDataset, build_downstream_dataset)
 
 from image_transforms import EvaluationTransform
@@ -32,18 +32,37 @@ def _set_trainable(module, enabled):
 def _datasets(schema, data_root, configs, transform, test_size):
     if schema == 'bethesda':
         classes, label_maps = BETHESDA_CLASSES, BETHESDA_LABEL_MAPS
-        dataset_types = [MendeleyLBCDataset, CPSMI2025Dataset, BTMDataset]
-        paths = [data_root / configs['PATH_MENDELEYLBC'], data_root / configs['PATH_CPSMI2025'], data_root / 'BTM']
+        dataset_types = [MendeleyLBCDataset, CPSMI2025Dataset, BTMDataset, HiCervixDataset]
+        paths = [
+            data_root / configs['PATH_MENDELEYLBC'],
+            data_root / configs['PATH_CPSMI2025'],
+            data_root / 'BTM',
+            data_root / configs['PATH_HICERVIX'],
+        ]
     elif schema == 'morphological':
         classes, label_maps = MORPHOLOGICAL_CLASSES, MORPHOLOGICAL_LABEL_MAPS
-        dataset_types = [HerlevDataset, SIPaKMeDDataset]
-        paths = [data_root / configs['PATH_HERLEV'], data_root / configs['PATH_SIPAKMED']]
+        dataset_types = [HerlevDataset, SIPaKMeDDataset, HiCervixDataset]
+        paths = [
+            data_root / configs['PATH_HERLEV'],
+            data_root / configs['PATH_SIPAKMED'],
+            data_root / configs['PATH_HICERVIX'],
+        ]
     else:
         raise ValueError(f'Unknown schema: {schema!r}')
 
     def build(split):
-        instances = [dataset_type(path, task='downstream', split=split, transform=transform, test_size=test_size)
-                     for dataset_type, path in zip(dataset_types, paths)]
+        instances = [
+            dataset_type(
+                path,
+                task='downstream',
+                split=split,
+                transform=transform,
+                test_size=test_size,
+                **({'label_level': 2 if schema == 'bethesda' else 1}
+                   if dataset_type is HiCervixDataset else {}),
+            )
+            for dataset_type, path in zip(dataset_types, paths)
+        ]
         return build_downstream_dataset(instances, label_maps, classes)
 
     return build('train'), build('test'), classes

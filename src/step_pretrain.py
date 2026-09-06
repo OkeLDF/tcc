@@ -14,6 +14,7 @@ from concat_datasets import (
     BTMDataset,
     CPSMI2025Dataset,
     HerlevDataset,
+    HiCervixDataset,
     MendeleyLBCDataset,
     SIPaKMeDDataset,
     build_pretraining_dataset,
@@ -51,6 +52,10 @@ def _build_dataset(split, data_root, configs, transform, test_size, validation_s
         ),
         BTMDataset(
             data_root / 'BTM', task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        ),
+        HiCervixDataset(
+            data_root / configs['PATH_HICERVIX'], task='pretraining', split=split,
             transform=transform, test_size=test_size, validation_size=validation_size,
         ),
     ])

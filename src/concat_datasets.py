@@ -30,6 +30,7 @@ from data import (
     MendeleyLBCDataset,
     SIPaKMeDDataset,
     BTMDataset,
+    HiCervixDataset,
 )
 
 
@@ -37,7 +38,7 @@ from data import (
 # Schema 1: Bethesda System diagnostic categories
 # ---------------------------------------------------------------------------
 
-BETHESDA_CLASSES = ['NILM', 'LSIL', 'HSIL', 'SCC', 'AdenoCA']
+BETHESDA_CLASSES = ['NILM', 'ASC-US', 'LSIL', 'ASC-H', 'HSIL', 'SCC', 'AdenoCA']
 
 BETHESDA_LABEL_MAPS = {
     'MendeleyLBCDataset': {
@@ -83,6 +84,32 @@ BETHESDA_LABEL_MAPS = {
         'LSIL': 'LSIL',
         'HSIL': 'HSIL',
     },
+    'HiCervixDataset': {
+        # Benign epithelial-cell types and organisms are reported under NILM.
+        'Normal': 'NILM',
+        'ECC': 'NILM',
+        'RPC': 'NILM',
+        'MPC': 'NILM',
+        'Atrophy': 'NILM',
+        'EMC': 'NILM',
+        'FUNGI': 'NILM',
+        'ACTINO': 'NILM',
+        'TRI': 'NILM',
+        'HSV': 'NILM',
+        'CC': 'NILM',
+        'ASC-US': 'ASC-US',
+        'LSIL': 'LSIL',
+        'ASC-H': 'ASC-H',
+        'HSIL': 'HSIL',
+        'SCC': 'SCC',
+        'ADC': 'AdenoCA',
+        # These categories do not have a defensible equivalent in this shared
+        # seven-class schema, so they are excluded from its training samples.
+        'PG': None,
+        'HCG': None,
+        'AGC-NOS': None,
+        'AGC-FN': None,
+    },
 }
 
 
@@ -115,6 +142,10 @@ MORPHOLOGICAL_LABEL_MAPS = {
         'Koilocytotic': 'abnormal',    # classic HPV/LSIL cytologic marker
         'Dyskeratotic': 'abnormal',
     },
+    'HiCervixDataset': {
+        'normal': 'normal',
+        'abnormal': 'abnormal',
+    },
 }
 
 
@@ -143,12 +174,17 @@ class RemappedLabelDataset(Dataset):
             f"{type(dataset).__name__} has raw labels with no entry in the "
             f"label map: {sorted(unmapped)}."
         )
+        self.indices = [
+            idx for idx, (_, raw_label) in enumerate(dataset.samples)
+            if label_map[raw_label] is not None
+        ]
+        assert self.indices, f'{type(dataset).__name__} has no samples in the target schema.'
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.indices)
 
     def __getitem__(self, idx):
-        item = self.dataset[idx]
+        item = self.dataset[self.indices[idx]]
         raw_label = self._idx_to_raw_label[item['label']]
         item['label'] = self.target_class_to_idx[self.label_map[raw_label]]
         return item

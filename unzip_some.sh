@@ -108,7 +108,7 @@ unzip cpsmi2025.zip \
     CPSMI2025/CPSMI2025/others/inflammatory/inflammatory108.jpg \
     CPSMI2025/CPSMI2025/others/inflammatory/inflammatory109.jpg
 
-mkdir SIPaKMeD
+mkdir -p SIPaKMeD
 cd SIPaKMeD
 unzip ../cervical-cancer-largest-dataset-sipakmed.zip \
     im_Dyskeratotic/im_Dyskeratotic/CROPPED/001_01.bmp \
@@ -465,7 +465,7 @@ unzip herlev-dataset.zip \
     "Herlev Dataset/train/severe_dysplastic/149056410-149056444-004.BMP"
 
 
-mkdir MendeleyLBC
+mkdir -p MendeleyLBC
 cd MendeleyLBC
 unzip ../mendeley-lbc-cervical-cancer.zip \
     "High squamous intra-epithelial lesion/HSIL_1 (1).jpg" \
@@ -516,4 +516,49 @@ unzip ../mendeley-lbc-cervical-cancer.zip \
     "Squamous cell carcinoma/SCC_3 (8).jpg" \
     "Squamous cell carcinoma/SCC_3 (9).jpg" \
     "Squamous cell carcinoma/SCC_4 (1).jpg"
+cd ..
+
+mkdir -p HiCervix
+cd HiCervix
+unzip test.zip \
+	test/0004cd10-0f39-3874-9ff7-2bc5a0853ce8.jpg \
+	test/00058fb3-fade-3ddb-9193-7ec6f058d493.jpg \
+	test/001adefb-0a5e-3dbf-a190-99d65a2aea16.jpg \
+	test/002e31e9-e0d9-3e42-8b6b-923392ff8813.jpg \
+	test/0030a4b7-be28-3df5-9ded-9093c44d26f7.jpg \
+	test/00320597-356b-3fe8-a28b-04edae135d54.jpg \
+	test/004b8701-dc6a-3cd5-9488-d6ca00eec486.jpg \
+	test/004cbb25-0fb4-3382-ba9a-d96f4402a069.jpg \
+	test/00633e13-23fc-3819-998b-e65be185ecd9.jpg \
+	test/0064d188-58a5-3d2b-bbc7-1657a0f64ab4.jpg \
+	test/0087ede2-f780-358b-9ec2-cff9d2b2cf67.jpg \
+	test/00936bfc-7494-3103-b78a-8800553e4e23.jpg
+
+unzip val.zip \
+	val/00053822-b3ef-3958-b8eb-09c0b7695738.jpg \
+	val/00187c1e-6a8c-3b30-8297-ac979a0c27fa.jpg \
+	val/003950ba-c85d-391b-b2d1-68650b1e3814.jpg \
+	val/00568340-9ff2-3f97-9c43-3347dcc4f303.jpg \
+	val/00692d80-30f9-38e5-8501-63287866d565.jpg \
+	val/0071597f-cdb5-3b02-9f71-618d71f46063.jpg \
+	val/0090fb66-8d20-3d94-aa57-56213acf3f10.jpg \
+	val/009525e4-1426-33dc-b4c0-a71d5c5ad571.jpg \
+	val/009b08b8-6f78-34dc-9586-8744c5c2d956.jpg \
+	val/00a80091-1d6a-39a9-ad7e-eaa364b1ae62.jpg \
+	val/00c3974c-5832-39a7-ac8f-3ae5ae5b66ab.jpg \
+	val/00c6cb36-db60-3ac1-81ca-ca9bdaf7fb1c.jpg
+
+unzip train.zip \
+	train/0001e436-8287-3ec8-b358-b7b204401e8a.jpg \
+	train/0004673e-bc2f-32d8-b248-9103727b919e.jpg \
+	train/00053e93-c2f8-3cf8-8bb0-7c8f17721c37.jpg \
+	train/00069cd1-dec8-3d6c-b863-f07a79ddb7c8.jpg \
+	train/0006ee09-bbba-3a43-84a4-f55f1ba6c572.jpg \
+	train/0008e24b-c8ce-3796-808c-33d1fdb79409.jpg \
+	train/000a9828-11a5-324f-89ab-42f2ca67eb6a.jpg \
+	train/000ab750-1c9f-3f31-8ef6-b25452b56bd1.jpg \
+	train/000b15a7-af0f-3407-8281-3abca4bb81c8.jpg \
+	train/000b2dba-7ee9-3e8a-806e-a22c81be635d.jpg \
+	train/000d1dd2-ddb2-368f-bbb4-e0f85249be6b.jpg \
+	train/0010627e-4bf8-3a61-a4cd-65f25f871708.jpg
 cd ..
