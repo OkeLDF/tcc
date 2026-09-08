@@ -6,7 +6,7 @@ import torch.nn as nn
 import yaml
 
 from torch.utils.data import DataLoader
-from transformers import ViTModel
+from model import LoRAViT
 
 import pretraining
 
@@ -88,8 +88,13 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f'Running pretraining on {device}')
 
-    encoder = ViTModel.from_pretrained('google/vit-base-patch16-224', add_pooling_layer=False).to(device)
-    projector = nn.Sequential(nn.Linear(768, 768), nn.ReLU(), nn.Linear(768, 128)).to(device)
+    lora_args = configs['PRETRAINING']['LORA']
+    r       = lora_args.get('R', 8)
+    alpha   = lora_args.get('ALPHA', 16)
+    dropout = lora_args.get('DROPOUT', 0.0)
+    
+    lora_vit = LoRAViT(r=r, alpha=alpha, dropout=dropout, device=device)
+    
     criterion = pretraining.NTXentLoss(float(configs['PRETRAINING']['TEMPERATURE']))
 
     output_dir = PROJECT_ROOT / configs['PATH_PRETRAINED']

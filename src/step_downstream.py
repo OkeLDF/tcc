@@ -8,7 +8,9 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassAUROC, MulticlassAveragePrecision, MulticlassRecall
-from transformers import ViTConfig, ViTForImageClassification, ViTModel
+
+from model import LoRAViT
+from transformers import ViTConfig, ViTForImageClassification
 
 import downstream
 
@@ -111,8 +113,14 @@ def main(schema='bethesda'):
         raise FileNotFoundError(f'Pretrained encoder not found: {checkpoint_path}')
 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    encoder = ViTModel.from_pretrained('google/vit-base-patch16-224', add_pooling_layer=False)
-    encoder.load_state_dict(checkpoint['model_state'])
+
+    lora_args = configs['PRETRAINING']['LORA']
+    r       = lora_args.get('R', 8)
+    alpha   = lora_args.get('ALPHA', 16)
+    dropout = lora_args.get('DROPOUT', 0.0)
+    
+    lora_vit = LoRAViT(r=r, alpha=alpha, dropout=dropout, device=device)
+    lora_vit.load_state_dict(checkpoint['model_state'])
 
     classifier = ViTForImageClassification(
         ViTConfig.from_pretrained(
