@@ -35,8 +35,26 @@ class NTXentLoss(nn.Module):
         return loss
 
 
+def scale_clip_and_step_f16(lora_vit, scaler, optimizer, autocast_dtype):
+    if autocast_dtype == torch.float16:
+        scaler.unscale_(optimizer)
+        nn.utils.clip_grad_norm_(
+            lora_vit.parameters(),
+            max_norm=MAX_CLIP_NORM,
+            error_if_nonfinite=True,
+        )
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        nn.utils.clip_grad_norm_(
+            lora_vit.parameters(),
+            max_norm=MAX_CLIP_NORM,
+            error_if_nonfinite=True,
+        )
+        optimizer.step()
 
-def train_step(encoder, projector, loader, contrastive_loss, optimizer, scheduler=None, device:str='cuda', accumulation_steps=1, autocast_dtype=None, scaler=None):
+
+def train_step(lora_vit, loader, contrastive_loss, optimizer, scheduler=None, device:str='cuda', accumulation_steps=1, autocast_dtype=None, scaler=None):
     device_type = torch.device(device).type
     total_loss = torch.tensor(0.0, device=device)
     len_loader = len(loader)
@@ -44,8 +62,7 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
     if len_loader % accumulation_steps != 0:
         logger.warning(f'loader length is not divisible by accumulation_steps: mod={len_loader % accumulation_steps}')
 
-    encoder.train()
-    projector.train()
+    lora_vit.train()
     optimizer.zero_grad(set_to_none=True)
 
     for it, batch in enumerate(loader, 1):
@@ -55,35 +72,18 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
 
         if autocast_dtype == torch.float16:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
-                cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
-                projection = projector(cls_embedding)
+                projection = lora_vit(pixel_values=pixel_values)
                 loss = contrastive_loss(projection)
             scaler.scale(loss / accumulation_steps).backward()
         else:
-            cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
-            projection = projector(cls_embedding)
+            projection = lora_vit(pixel_values=pixel_values)
             loss = contrastive_loss(projection)
             (loss / accumulation_steps).backward()
 
         total_loss += loss.detach()
 
         if it % accumulation_steps == 0 or it == len_loader:
-            if autocast_dtype == torch.float16:
-                scaler.unscale_(optimizer)
-                nn.utils.clip_grad_norm_(
-                    chain(encoder.parameters(), projector.parameters()),
-                    max_norm=MAX_CLIP_NORM,
-                    error_if_nonfinite=True,
-                )
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                nn.utils.clip_grad_norm_(
-                    chain(encoder.parameters(), projector.parameters()),
-                    max_norm=MAX_CLIP_NORM,
-                    error_if_nonfinite=True,
-                )
-                optimizer.step()
+            scale_clip_and_step_f16(lora_vit, scaler, optimizer, autocast_dtype)
             optimizer.zero_grad(set_to_none=True)
 
             if scheduler is not None:
@@ -98,13 +98,12 @@ def train_step(encoder, projector, loader, contrastive_loss, optimizer, schedule
 
 
 @torch.inference_mode()
-def eval_step(encoder, projector, loader, contrastive_loss, device: str = 'cuda', autocast_dtype=None):
+def eval_step(lora_vit, loader, contrastive_loss, device: str = 'cuda', autocast_dtype=None):
     device_type = torch.device(device).type
     total_loss = torch.tensor(0.0, device=device)
     len_loader = len(loader)
 
-    encoder.eval()
-    projector.eval()
+    lora_vit.eval()
 
     for it, batch in enumerate(loader, 1):
         aug_i = batch['augmented_i'].to(device)
@@ -113,12 +112,10 @@ def eval_step(encoder, projector, loader, contrastive_loss, device: str = 'cuda'
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
-                cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
-                projection = projector(cls_embedding)
+                projection = lora_vit(pixel_values=pixel_values)
                 loss = contrastive_loss(projection)
         else:
-            cls_embedding = encoder(pixel_values=pixel_values).last_hidden_state[:, 0, :]
-            projection = projector(cls_embedding)
+            projection = lora_vit(pixel_values=pixel_values)
             loss = contrastive_loss(projection)
 
         total_loss += loss

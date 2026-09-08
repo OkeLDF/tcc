@@ -9,8 +9,7 @@ from torch.utils.data import DataLoader
 from torchmetrics import MetricCollection
 from torchmetrics.classification import MulticlassAUROC, MulticlassAveragePrecision, MulticlassRecall
 
-from model import LoRAViT
-from transformers import ViTConfig, ViTForImageClassification
+from model import LoRAViTModel, LoRAViTClassifier
 
 import downstream
 
@@ -119,19 +118,10 @@ def main(schema='bethesda'):
     alpha   = lora_args.get('ALPHA', 16)
     dropout = lora_args.get('DROPOUT', 0.0)
     
-    lora_vit = LoRAViT(r=r, alpha=alpha, dropout=dropout, device=device)
+    lora_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
     lora_vit.load_state_dict(checkpoint['model_state'])
 
-    classifier = ViTForImageClassification(
-        ViTConfig.from_pretrained(
-            'google/vit-base-patch16-224',
-            num_labels=len(classes),
-            id2label=dict(enumerate(classes)),
-            label2id={label: index for index, label in enumerate(classes)},
-        )
-    )
-    classifier.vit.load_state_dict(encoder.state_dict())
-    classifier.to(device)
+    classifier = LoRAViTClassifier(lora_vit, classes)
 
     criterion = nn.CrossEntropyLoss()
 
@@ -155,7 +145,7 @@ def main(schema='bethesda'):
         if epochs == 0:
             continue
 
-        _set_trainable(classifier.vit, encoder_trainable)
+        _set_trainable(classifier.encoder, encoder_trainable)
         optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, classifier.parameters()), lr=learning_rate)
 
         for epoch in range(epochs):

@@ -6,7 +6,7 @@ import torch.nn as nn
 import yaml
 
 from torch.utils.data import DataLoader
-from model import LoRAViT
+from model import LoRAViTModel
 
 import pretraining
 
@@ -93,7 +93,7 @@ def main():
     alpha   = lora_args.get('ALPHA', 16)
     dropout = lora_args.get('DROPOUT', 0.0)
     
-    lora_vit = LoRAViT(r=r, alpha=alpha, dropout=dropout, device=device)
+    lora_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
     
     criterion = pretraining.NTXentLoss(float(configs['PRETRAINING']['TEMPERATURE']))
 
@@ -115,16 +115,16 @@ def main():
         if epochs == 0:
             continue
 
-        _set_trainable(encoder, encoder_trainable)
+        _set_trainable(lora_vit.encoder, encoder_trainable)
         optimizer = torch.optim.AdamW(
-            filter(lambda p: p.requires_grad, list(encoder.parameters()) + list(projector.parameters())),
+            filter(lambda p: p.requires_grad, lora_vit.parameters()),
             lr=learning_rate,
         )
 
         for epoch in range(epochs):
             train_loss = pretraining.train_step(
-                encoder, projector, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
-            eval_loss = pretraining.eval_step(encoder, projector, valid_loader, criterion, device=device)
+                lora_vit, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
+            eval_loss = pretraining.eval_step(lora_vit, valid_loader, criterion, device=device)
 
             result = {
                 'epoch': epoch,
@@ -137,7 +137,7 @@ def main():
 
             if save_every != 0 and epoch % save_every == 0:
                 pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
-                save_checkpoint(encoder, optimizer, None, epoch, result, checkpoint_dir / 'last_vit_pretrained_encoder.pt')
+                save_checkpoint(lora_vit, optimizer, None, epoch, result, checkpoint_dir / 'last_vit_pretrained_encoder.pt')
 
             if early_stopping.step(eval_loss):
                 logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
@@ -148,7 +148,7 @@ def main():
             break
 
     pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
-    save_checkpoint(encoder, optimizer, None, completed_epochs, history[-1] if history else {}, output_dir / 'vit_pretrained_encoder.pt')
+    save_checkpoint(lora_vit, optimizer, None, completed_epochs, history[-1] if history else {}, output_dir / 'vit_pretrained_encoder.pt')
 
 
 if __name__ == '__main__':
