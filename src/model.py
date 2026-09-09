@@ -17,7 +17,7 @@ class LoRAViTModel(nn.Module):
         config = LoraConfig(
             r=r,
             lora_alpha=alpha,
-            target_modules=["query", "value"],
+            target_modules="all-linear",
             lora_dropout=dropout,
         )
         
