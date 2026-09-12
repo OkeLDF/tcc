@@ -70,11 +70,14 @@ def train_step(lora_vit, loader, contrastive_loss, optimizer, scheduler=None, de
         aug_j = batch['augmented_j'].to(device)
         pixel_values = torch.cat([aug_i, aug_j], dim=0)
 
-        if autocast_dtype == torch.float16:
+        if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
                 projection = lora_vit(pixel_values=pixel_values)
                 loss = contrastive_loss(projection)
-            scaler.scale(loss / accumulation_steps).backward()
+            if autocast_dtype == torch.float16:
+                scaler.scale(loss / accumulation_steps).backward()
+            else:
+                (loss / accumulation_steps).backward()
         else:
             projection = lora_vit(pixel_values=pixel_values)
             loss = contrastive_loss(projection)

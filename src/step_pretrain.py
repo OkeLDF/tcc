@@ -32,6 +32,12 @@ def _set_trainable(module, enabled):
         parameter.requires_grad = enabled
 
 
+def _set_trainable_lora(peft_model, enabled):
+    for named, parameter in peft_model.named_parameters():
+        if 'lora_' in name:
+            parameter.requires_grad = enabled
+
+
 def _build_dataset(split, data_root, configs, transform, test_size, validation_size):
     return build_pretraining_dataset([
         CPSMI2025Dataset(
@@ -115,7 +121,7 @@ def main():
         if epochs == 0:
             continue
 
-        _set_trainable(lora_vit.encoder, encoder_trainable)
+        _set_trainable_lora(lora_vit.encoder, encoder_trainable)
         optimizer = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, lora_vit.parameters()),
             lr=learning_rate,
