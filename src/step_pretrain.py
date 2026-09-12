@@ -33,7 +33,7 @@ def _set_trainable(module, enabled):
 
 
 def _set_trainable_lora(peft_model, enabled):
-    for named, parameter in peft_model.named_parameters():
+    for name, parameter in peft_model.named_parameters():
         if 'lora_' in name:
             parameter.requires_grad = enabled
 
