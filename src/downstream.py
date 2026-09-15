@@ -26,10 +26,10 @@ def train_step(model, loader, criterion, optimizer, scheduler=None, device:str='
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
-                logits = model(pixel_values).logits
+                logits = model(pixel_values)
                 loss = criterion(logits, label)
         else:
-            logits = model(pixel_values).logits
+            logits = model(pixel_values)
             loss = criterion(logits, label)
 
         total_loss += loss.detach()
@@ -65,10 +65,10 @@ def eval_step(model, loader, criterion, metrics=None, device:str='cuda', autocas
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
-                logits = model(pixel_values).logits
+                logits = model(pixel_values)
                 loss = criterion(logits, label)
         else:
-            logits = model(pixel_values).logits
+            logits = model(pixel_values)
             loss = criterion(logits, label)
 
         total_loss += loss.detach()
