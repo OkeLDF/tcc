@@ -52,6 +52,6 @@ class LoRAViTClassifier(nn.Module):
         )
 
     def forward(self, pixel_values):
-        embeddings = self.encoder(pixel_values).logits
+        embeddings = self.encoder(pixel_values)
         logits = self.classifier(embeddings)
         return logits
