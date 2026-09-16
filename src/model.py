@@ -44,12 +44,8 @@ class LoRAViTClassifier(nn.Module):
         self.classifier = nn.Linear(128, len(classes))
         self.classifier.to(device)
 
-        self.config = ViTConfig.from_pretrained(
-            'google/vit-base-patch16-224',
-            num_labels=len(classes),
-            id2label=dict(enumerate(classes)),
-            label2id={label: i for i, label in enumerate(classes)},
-        )
+        self.id2label = dict(enumerate(classes)),
+        self.label2id = {label: i for i, label in enumerate(classes)},
 
     def forward(self, pixel_values):
         embeddings = self.encoder(pixel_values)
