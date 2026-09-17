@@ -17,6 +17,7 @@ from concat_datasets import (
     HiCervixDataset,
     MendeleyLBCDataset,
     SIPaKMeDDataset,
+    PapicitoDataset,
     build_pretraining_dataset,
 )
 from image_transforms import SimCLRTransform
@@ -57,13 +58,17 @@ def _build_dataset(split, data_root, configs, transform, test_size, validation_s
             transform=transform, test_size=test_size, validation_size=validation_size,
         ),
         BTMDataset(
-            data_root / 'BTM', task='pretraining', split=split,
+            data_root / configs['PATH_BTM'], task='pretraining', split=split,
             transform=transform, test_size=test_size, validation_size=validation_size,
         ),
         HiCervixDataset(
             data_root / configs['PATH_HICERVIX'], task='pretraining', split=split,
             transform=transform, test_size=test_size, validation_size=validation_size,
         ),
+        PapicitoDataset(
+            data_root / configs['PATH_PAPICITO'], task='pretraining', split=split,
+            transform=transform, test_size=test_size, validation_size=validation_size,
+        )
     ])
 
 

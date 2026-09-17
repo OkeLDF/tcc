@@ -14,7 +14,7 @@ from model import LoRAViTModel, LoRAViTClassifier
 import downstream
 
 from concat_datasets import (BETHESDA_CLASSES, BETHESDA_LABEL_MAPS, MORPHOLOGICAL_CLASSES,
-    MORPHOLOGICAL_LABEL_MAPS, BTMDataset, CPSMI2025Dataset, HerlevDataset, HiCervixDataset, MendeleyLBCDataset,
+    MORPHOLOGICAL_LABEL_MAPS, BTMDataset, CPSMI2025Dataset, HerlevDataset, HiCervixDataset, PapicitoDataset, MendeleyLBCDataset,
     SIPaKMeDDataset, build_downstream_dataset)
 
 from image_transforms import EvaluationTransform
@@ -33,12 +33,13 @@ def _set_trainable(module, enabled):
 def _datasets(schema, data_root, configs, transform, test_size):
     if schema == 'bethesda':
         classes, label_maps = BETHESDA_CLASSES, BETHESDA_LABEL_MAPS
-        dataset_types = [MendeleyLBCDataset, CPSMI2025Dataset, BTMDataset, HiCervixDataset]
+        dataset_types = [MendeleyLBCDataset, CPSMI2025Dataset, BTMDataset, HiCervixDataset, PapicitoDataset]
         paths = [
             data_root / configs['PATH_MENDELEYLBC'],
             data_root / configs['PATH_CPSMI2025'],
-            data_root / 'BTM',
+            data_root / configs['PATH_BTM'],
             data_root / configs['PATH_HICERVIX'],
+            data_root / configs['PATH_PAPICITO'],
         ]
     elif schema == 'morphological':
         classes, label_maps = MORPHOLOGICAL_CLASSES, MORPHOLOGICAL_LABEL_MAPS

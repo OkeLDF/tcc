@@ -13,7 +13,10 @@ what each dataset can honestly support:
   - BETHESDA schema: for datasets whose labels are (or cleanly correspond
     to) Bethesda System diagnostic categories. Native fit: MendeleyLBC and
     BTM (raw labels already ARE Bethesda terms). Direct mapping (dataset
-    already encodes lesion grade): CPSMI2025.
+    already encodes lesion grade): CPSMI2025. Native + mapped: Papicito
+    (NILM/HSIL/LSIL are native; CA/CA nao queratinizante map to SCC;
+    Celulas ASCH/ASCUS map to ASC-H/ASC-US; the remaining Celulas_* cell
+    types map to NILM).
 
   - MORPHOLOGICAL schema: for datasets labeled by cell morphology / dysplasia
     grade rather than a diagnostic category. Herlev and SIPaKMeD don't share
@@ -31,6 +34,7 @@ from data import (
     SIPaKMeDDataset,
     BTMDataset,
     HiCervixDataset,
+    PapicitoDataset,
 )
 
 
@@ -119,6 +123,26 @@ BETHESDA_LABEL_MAPS = {
         'AGC': None,
         'ASC': None,
     },
+    'PapicitoDataset': {
+        # Native Bethesda terms from the two Citologia collections.
+        'NILM': 'NILM',
+        'LSIL': 'LSIL',
+        'HSIL': 'HSIL',
+        # 'CA' (Carcinoma escamoso) and its non-keratinizing subtype from
+        # Outras are both squamous cell carcinoma -- Bethesda's SCC.
+        'CA': 'SCC',
+        'CA nao queratinizante': 'SCC',
+        # Cell-type labels from Outras/imagens: ASC-H/ASC-US cells map
+        # directly; the remaining cell types (intermediate, metaplastic,
+        # parabasal, superficial) are all benign/normal squamous cell
+        # populations, grouped under NILM same as CPSMI2025's normal/*.
+        'Celulas ASCH': 'ASC-H',
+        'Celulas ASCUS': 'ASC-US',
+        'Celulas Intermediarias': 'NILM',
+        'Celulas Metaplasicas': 'NILM',
+        'Celulas Parabasais': 'NILM',
+        'Celulas Superficiais': 'NILM',
+    },
 }
 
 
@@ -154,6 +178,19 @@ MORPHOLOGICAL_LABEL_MAPS = {
     'HiCervixDataset': {
         'normal': 'normal',
         'abnormal': 'abnormal',
+    },
+    'PapicitoDataset': {
+        'NILM': 'normal',
+        'LSIL': 'abnormal',
+        'HSIL': 'abnormal',
+        'CA': 'abnormal',
+        'CA nao queratinizante': 'abnormal',
+        'Celulas ASCH': 'abnormal',
+        'Celulas ASCUS': 'abnormal',
+        'Celulas Intermediarias': 'normal',
+        'Celulas Metaplasicas': 'normal',
+        'Celulas Parabasais': 'normal',
+        'Celulas Superficiais': 'normal',
     },
 }
 
@@ -235,24 +272,42 @@ paths = {
     'mendeley': '/data/MendeleyLBC',
     'sipakmed': '/data/SIPaKMeD',
     'btm': '/data/BTM',
+    'hicervix': '/data/HiCervix',
+    'papicito': '/data/Papicito',
 }
 
 # --- pretraining: every dataset, labels irrelevant ---
-pretraining_ds = build_pretraining_dataset([
+# (HiCervixDataset's label_level doesn't matter here -- task='pretraining'
+# always returns 'unlabeled' regardless of label_level.)
+pretraining_train = build_pretraining_dataset([
     CPSMI2025Dataset(paths['cpsmi2025'], task='pretraining', split='train', transform=pretrain_transform),
     HerlevDataset(paths['herlev'], task='pretraining', split='train', transform=pretrain_transform),
     MendeleyLBCDataset(paths['mendeley'], task='pretraining', split='train', transform=pretrain_transform),
     SIPaKMeDDataset(paths['sipakmed'], task='pretraining', split='train', transform=pretrain_transform),
     BTMDataset(paths['btm'], task='pretraining', split='train', transform=pretrain_transform),
+    HiCervixDataset(paths['hicervix'], task='pretraining', split='train', transform=pretrain_transform),
+    PapicitoDataset(paths['papicito'], task='pretraining', split='train', transform=pretrain_transform),
+])
+pretraining_valid = build_pretraining_dataset([
+    CPSMI2025Dataset(paths['cpsmi2025'], task='pretraining', split='valid', transform=pretrain_transform),
+    HerlevDataset(paths['herlev'], task='pretraining', split='valid', transform=pretrain_transform),
+    MendeleyLBCDataset(paths['mendeley'], task='pretraining', split='valid', transform=pretrain_transform),
+    SIPaKMeDDataset(paths['sipakmed'], task='pretraining', split='valid', transform=pretrain_transform),
+    BTMDataset(paths['btm'], task='pretraining', split='valid', transform=pretrain_transform),
+    HiCervixDataset(paths['hicervix'], task='pretraining', split='valid', transform=pretrain_transform),
+    PapicitoDataset(paths['papicito'], task='pretraining', split='valid', transform=pretrain_transform),
 ])
 
-# --- downstream, Bethesda schema: MendeleyLBC + BTM (native) + CPSMI2025 (mapped) ---
+# --- downstream, Bethesda schema: MendeleyLBC + BTM + Papicito (native/mapped)
+#     + CPSMI2025 (mapped) + HiCervix (label_level=2, mapped) ---
 # Add HerlevDataset(...) to this list too if you're OK with its extended mapping.
 bethesda_train = build_downstream_dataset(
     [
         MendeleyLBCDataset(paths['mendeley'], task='downstream', split='train', transform=eval_transform),
         CPSMI2025Dataset(paths['cpsmi2025'], task='downstream', split='train', transform=eval_transform),
         BTMDataset(paths['btm'], task='downstream', split='train', transform=eval_transform),
+        HiCervixDataset(paths['hicervix'], label_level=2, task='downstream', split='train', transform=eval_transform),
+        PapicitoDataset(paths['papicito'], task='downstream', split='train', transform=eval_transform),
     ],
     BETHESDA_LABEL_MAPS,
     BETHESDA_CLASSES,
@@ -262,16 +317,21 @@ bethesda_test = build_downstream_dataset(
         MendeleyLBCDataset(paths['mendeley'], task='downstream', split='test', transform=eval_transform),
         CPSMI2025Dataset(paths['cpsmi2025'], task='downstream', split='test', transform=eval_transform),
         BTMDataset(paths['btm'], task='downstream', split='test', transform=eval_transform),
+        HiCervixDataset(paths['hicervix'], label_level=2, task='downstream', split='test', transform=eval_transform),
+        PapicitoDataset(paths['papicito'], task='downstream', split='test', transform=eval_transform),
     ],
     BETHESDA_LABEL_MAPS,
     BETHESDA_CLASSES,
 )
 
-# --- downstream, morphological schema: Herlev + SIPaKMeD ---
+# --- downstream, morphological schema: Herlev + SIPaKMeD + Papicito
+#     + HiCervix (label_level=1, native) ---
 morphological_train = build_downstream_dataset(
     [
         HerlevDataset(paths['herlev'], task='downstream', split='train', transform=eval_transform),
         SIPaKMeDDataset(paths['sipakmed'], task='downstream', split='train', transform=eval_transform),
+        HiCervixDataset(paths['hicervix'], label_level=1, task='downstream', split='train', transform=eval_transform),
+        PapicitoDataset(paths['papicito'], task='downstream', split='train', transform=eval_transform),
     ],
     MORPHOLOGICAL_LABEL_MAPS,
     MORPHOLOGICAL_CLASSES,
@@ -280,6 +340,8 @@ morphological_test = build_downstream_dataset(
     [
         HerlevDataset(paths['herlev'], task='downstream', split='test', transform=eval_transform),
         SIPaKMeDDataset(paths['sipakmed'], task='downstream', split='test', transform=eval_transform),
+        HiCervixDataset(paths['hicervix'], label_level=1, task='downstream', split='test', transform=eval_transform),
+        PapicitoDataset(paths['papicito'], task='downstream', split='test', transform=eval_transform),
     ],
     MORPHOLOGICAL_LABEL_MAPS,
     MORPHOLOGICAL_CLASSES,

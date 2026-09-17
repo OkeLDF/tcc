@@ -38,6 +38,15 @@ def list_images(directory, extensions=IMAGE_EXTENSIONS):
     )
 
 
+def list_images_recursive(directory, extensions=IMAGE_EXTENSIONS):
+    """Return a sorted list of image file paths anywhere under `directory` (recursive)."""
+    directory = Path(directory)
+    return sorted(
+        p for p in directory.rglob('*')
+        if p.is_file() and p.suffix.lower() in extensions
+    )
+
+
 class BaseCervicalCytologyDataset(Dataset):
     """
     Common interface every dataset in this module respects, so all four
@@ -378,3 +387,86 @@ class HiCervixDataset(BaseCervicalCytologyDataset):
         ]
         assert selected, f'No samples found in HiCervix {source_split!r} partition.'
         return np.array(selected)
+
+
+class PapicitoDataset(BaseCervicalCytologyDataset):
+    """Private dataset merging three heterogeneous sub-collections.
+
+    Layout::
+
+        <path>/Citologia convencional/<CA|HSIL|LSIL|NILM>_<full name>/[<subtype>/]*.jpg
+        <path>/Citologia em meio líquido/<CA|HSIL|LSIL|NILM>_<full name>/[<subtype>/]*.jpg
+        <path>/Outras/imagens/<class>/*.tif
+
+    "Citologia convencional" (conventional smear) and "Citologia em meio
+    líquido" (liquid-based cytology) share the same 4-class Bethesda-style
+    top level (CA/HSIL/LSIL/NILM), but the full Portuguese folder name is
+    cased inconsistently between the two ('CA_Carcinoma escamoso' vs
+    'CA_carcinoma escamoso'). The label used here is only the token before
+    the first underscore, which IS consistently cased in both. NILM has an
+    extra nesting level in both collections (Atrofia/Metaplasia under
+    conventional, Metaplasia/Trichomonas under liquid-based); samples are
+    collected recursively so this doesn't need special-casing, but note
+    those subtype names aren't captured as their own label -- only the
+    top-level Bethesda category is.
+
+    "Outras/imagens" (a third, heterogeneous source) mixes Bethesda-style
+    categories (CA_nao_queratinizante, HSIL, LSIL) with SIPaKMeD-style
+    morphological cell-type categories (Celulas_ASCH, Celulas_ASCUS,
+    Celulas_Intermediarias, Celulas_Metaplasicas, Celulas_Parabasais,
+    Celulas_Superficiais). Its raw folder name (underscores -> spaces) is
+    used as-is; harmonizing this mixed vocabulary onto a shared schema is a
+    concat_datasets.py concern, same as CPSMI2025 and HiCervix. Bare 'HSIL'
+    and 'LSIL' here intentionally collide with the same labels produced by
+    the two Citologia collections above -- same diagnostic category, just a
+    third data source.
+
+    'Todas juntas' ("all together") inside Outras/imagens aggregates copies
+    of every other class's images in that collection -- it is explicitly
+    excluded, since including it would duplicate every "Outras" sample and
+    leak across classes.
+
+    Images: .jpg in both Citologia collections, .tif in Outras. The .tif
+    files are NOT high-bit-depth -- confirmed via PIL's getexif():
+    BitsPerSample=(8,8,8), SamplesPerPixel=3, i.e. standard 8-bit-per-
+    channel RGB, just LZW-compressed with a horizontal-differencing
+    predictor (Compression=5, Predictor=2). cv2.imread reads them the same
+    as the .jpg files -- no special dtype/normalization handling needed.
+
+    No official train/test split is shipped, so the base class's random
+    stratified split applies as usual.
+
+    If merging all three sources under one flat label space turns out to
+    hurt more than the extra data helps, split this into three classes
+    later, one per sub-collection -- reuse the two _collect_* method bodies
+    below, they're already separated along that boundary.
+    """
+
+    CITOLOGIA_COLLECTIONS = ['Citologia convencional', 'Citologia em meio líquido']
+    EXCLUDED_OUTRAS_FOLDERS = {'todas juntas'}
+
+    def _collect_samples(self):
+        return self._collect_citologia_collections() + self._collect_outras()
+
+    def _collect_citologia_collections(self):
+        samples = []
+        for collection_name in self.CITOLOGIA_COLLECTIONS:
+            collection_dir = self.path / collection_name
+            assert collection_dir.is_dir(), f"Expected {str(collection_dir)!r} to exist."
+            for class_dir in sorted(p for p in collection_dir.iterdir() if p.is_dir()):
+                label = class_dir.name.split('_')[0]
+                for img_path in list_images_recursive(class_dir):
+                    samples.append((str(img_path), label))
+        return samples
+
+    def _collect_outras(self):
+        samples = []
+        outras_dir = self.path / 'Outras' / 'imagens'
+        assert outras_dir.is_dir(), f"Expected {str(outras_dir)!r} to exist."
+        for class_dir in sorted(p for p in outras_dir.iterdir() if p.is_dir()):
+            if class_dir.name.strip().lower() in self.EXCLUDED_OUTRAS_FOLDERS:
+                continue
+            label = class_dir.name.replace('_', ' ')
+            for img_path in list_images_recursive(class_dir):
+                samples.append((str(img_path), label))
+        return samples
