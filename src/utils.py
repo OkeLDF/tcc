@@ -31,18 +31,29 @@ def epoch_stats(epoch: int, history_entry: dict):
     logger.info(log_string + metrics_string)
 
 
+def _to_cpu(obj):
+    if torch.is_tensor(obj):
+        return obj.detach().cpu()
+    if isinstance(obj, dict):
+        return {k: _to_cpu(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_cpu(v) for v in obj]
+    return obj
+
+
 def save_checkpoint(model, optimizer, scheduler, epoch: int, metrics: dict, path: Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".pt.tmp")
     torch.save({
         "epoch": epoch,
-        "model_state": model.state_dict(),
-        "optimizer_state": optimizer.state_dict(),
-        "scheduler_state": scheduler.state_dict() if scheduler is not None else None,
+        "model_state": _to_cpu(model.state_dict()),
+        "optimizer_state": _to_cpu(optimizer.state_dict()),
+        "scheduler_state": _to_cpu(scheduler.state_dict()) if scheduler is not None else None,
         "metrics": {k: float(v) for k, v in metrics.items() if isinstance(v, Number)},
     }, tmp)
     os.replace(tmp, path)
+    torch.cuda.empty_cache()
     print(f"  checkpoint → {path}")
 
 
