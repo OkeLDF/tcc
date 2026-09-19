@@ -93,7 +93,7 @@ def main():
         pin_memory=torch.cuda.is_available(),
         persistent_workers=num_workers > 0,
     )
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, **loader_options)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, **loader_options)
     valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, **loader_options)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

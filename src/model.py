@@ -29,7 +29,7 @@ class LoRAViTModel(nn.Module):
 
     def forward(self, pixel_values):
         outputs = self.encoder(pixel_values=pixel_values)
-        cls_token = outputs.last_hidden_state[:, 0, :]
+        cls_token = outputs.last_hidden_state[:, 0, :].clone()
         return self.projector(cls_token)
 
 
