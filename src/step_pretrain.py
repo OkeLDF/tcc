@@ -117,13 +117,34 @@ def main():
         ('unfrozen', int(configs['PRETRAINING']['UNFROZEN_EPOCHS']), float(configs['PRETRAINING']['UNFROZEN_LR']), True),
     ]
     
+    resume_path = checkpoint_dir / 'last_vit_pretrained_encoder.pt'
+
+    resume_phase, resume_epoch, resume_optimizer_state = 0, 0, None
+
+    if configs['PRETRAINING'].get('RESUME', False) and resume_path.exists():
+        ckpt = load_checkpoint(lora_vit, resume_path, device)
+        resume_phase = ckpt['phase']
+        resume_epoch = ckpt['epoch'] + 1
+        resume_optimizer_state = ckpt['optimizer_state']
+
+        # If the saved epoch was the last of its phase, start the next phase
+        if resume_epoch >= phases[resume_phase][1]:
+            resume_phase += 1
+            resume_epoch = 0
+            resume_optimizer_state = None         # new phase, fresh optimizer
+
+        # Keep the previous history instead of overwriting the CSV
+        history_path = log_root / 'pretraining_history.csv'
+        if history_path.exists():
+            history = pd.read_csv(history_path).to_dict('records')
+    
     autocast_dtype = torch.bfloat16
     scaler = None
 
     stop_training = False
     completed_epochs = 0
-    for phase, epochs, learning_rate, encoder_trainable in phases:
-        if epochs == 0:
+    for phase_idx, (phase, epochs, learning_rate, encoder_trainable) in enumerate(phases):
+        if epochs == 0 or phase_idx < resume_phase:
             continue
 
         _set_trainable_lora(lora_vit.encoder, encoder_trainable)
@@ -131,15 +152,23 @@ def main():
             filter(lambda p: p.requires_grad, lora_vit.parameters()),
             lr=learning_rate,
         )
+        
+        first_epoch = 0
+        if phase_idx == resume_phase:
+            first_epoch = resume_epoch
+            if resume_optimizer_state is not None:
+                optimizer.load_state_dict(resume_optimizer_state)
 
-        for epoch in range(epochs):
+        for epoch in range(first_epoch, epochs):
             train_loss = pretraining.train_step(
                 lora_vit, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
             eval_loss = pretraining.eval_step(lora_vit, valid_loader, criterion, device=device)
-
+            completed_epochs += 1
+            
             result = {
                 'epoch': epoch,
                 'phase': phase,
+                'phase_idx': phase_idx,
                 'train_loss': train_loss,
                 'eval_loss': eval_loss,
             }
@@ -148,7 +177,7 @@ def main():
 
             if save_every != 0 and epoch % save_every == 0:
                 pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
-                save_checkpoint(lora_vit, optimizer, None, epoch, result, checkpoint_dir / 'last_vit_pretrained_encoder.pt')
+                save_checkpoint(lora_vit, optimizer, None, epoch, phase_idx, result, checkpoint_dir / 'last_vit_pretrained_encoder.pt')
 
             if early_stopping.step(eval_loss):
                 logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
@@ -159,7 +188,7 @@ def main():
             break
 
     pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
-    save_checkpoint(lora_vit, optimizer, None, completed_epochs, history[-1] if history else {}, output_dir / 'vit_pretrained_encoder.pt')
+    save_checkpoint(lora_vit, optimizer, None, completed_epochs, phase_idx, history[-1] if history else {}, output_dir / 'vit_pretrained_encoder.pt')
 
 
 if __name__ == '__main__':

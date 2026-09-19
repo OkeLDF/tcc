@@ -39,14 +39,33 @@ def _to_cpu(obj):
     if isinstance(obj, list):
         return [_to_cpu(v) for v in obj]
     return obj
+    
+    
+def load_checkpoint(model, path, device, optimizer=None, scheduler=None):
+    """Restore a checkpoint written by utils.save_checkpoint."""
+    checkpoint = torch.load(path, map_location=device)
+
+    model.load_state_dict(checkpoint['model_state'])  # strict=True on purpose
+
+    if optimizer is not None and checkpoint.get('optimizer_state') is not None:
+        optimizer.load_state_dict(checkpoint['optimizer_state'])
+
+    if scheduler is not None and checkpoint.get('scheduler_state') is not None:
+        scheduler.load_state_dict(checkpoint['scheduler_state'])
+
+    epoch = checkpoint['epoch']
+    metrics = checkpoint.get('metrics', {})
+    logger.info(f'Loaded checkpoint from {path} (epoch {epoch}, metrics {metrics})')
+    return checkpoint
 
 
-def save_checkpoint(model, optimizer, scheduler, epoch: int, metrics: dict, path: Path) -> None:
+def save_checkpoint(model, optimizer, scheduler, epoch: int, phase: str, metrics: dict, path: Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".pt.tmp")
     torch.save({
         "epoch": epoch,
+        "phase": phase,
         "model_state": _to_cpu(model.state_dict()),
         "optimizer_state": _to_cpu(optimizer.state_dict()),
         "scheduler_state": _to_cpu(scheduler.state_dict()) if scheduler is not None else None,
