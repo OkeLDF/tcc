@@ -22,7 +22,7 @@ from concat_datasets import (
 )
 from image_transforms import SimCLRTransform
 from log import logger
-from utils import EarlyStopping, epoch_stats, save_checkpoint
+from utils import EarlyStopping, epoch_stats, save_checkpoint, _mem
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -160,6 +160,7 @@ def main():
                 optimizer.load_state_dict(resume_optimizer_state)
 
         for epoch in range(first_epoch, epochs):
+            _mem(f"epoch {epoch} start")
             train_loss = pretraining.train_step(
                 lora_vit, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
             eval_loss = pretraining.eval_step(lora_vit, valid_loader, criterion, device=device)
@@ -183,6 +184,8 @@ def main():
                 logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
                 stop_training = True
                 break
+                
+            _mem(f"epoch {epoch} end")
 
         if stop_training:
             break

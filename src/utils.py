@@ -40,6 +40,13 @@ def _to_cpu(obj):
         return [_to_cpu(v) for v in obj]
     return obj
     
+
+def _mem(tag):
+    a = torch.cuda.memory_allocated() / 1e9
+    r = torch.cuda.memory_reserved() / 1e9
+    logger.info(f"[{tag}] allocated={a:.2f} GB reserved={r:.2f} GB")
+    print(f"[{tag}] allocated={a:.2f} GB reserved={r:.2f} GB")
+    
     
 def load_checkpoint(model, path, device, optimizer=None, scheduler=None):
     """Restore a checkpoint written by utils.save_checkpoint."""
