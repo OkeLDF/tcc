@@ -186,6 +186,8 @@ def main():
                 break
                 
             _mem(f"epoch {epoch} end")
+            torch.cuda.empty_cache()
+            _mem(f"epoch {epoch} end (post empty_cache)")
 
         if stop_training:
             break
