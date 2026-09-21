@@ -168,7 +168,13 @@ def main(schema='bethesda'):
             if save_every != 0 and epoch % save_every == 0:
                 pd.DataFrame(history).to_csv(log_root / 'downstream_history.csv', index=False)
                 save_checkpoint(
-                    classifier, optimizer, None, epoch, result, phase_idx, output_dir / 'checkpoint' / 'last_vit_classifier.pt'
+                    model=classifier,
+                    optimizer=optimizer,
+                    scheduler=None,
+                    epoch=epoch,
+                    phase=phase_idx,
+                    metrics=result,
+                    path=output_dir / 'checkpoint' / 'last_vit_classifier.pt'
                 )
 
             if early_stopping.step(eval_loss):
