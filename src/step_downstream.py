@@ -1,3 +1,4 @@
+
 from pathlib import Path
 
 import yaml
@@ -142,7 +143,7 @@ def main(schema='bethesda'):
     early_stopping = EarlyStopping(patience=5)
 
     stop_training = False
-    for phase, epochs, learning_rate, encoder_trainable in phases:
+    for phase_idx, (phase, epochs, learning_rate, encoder_trainable) in enumerate(phases):
         if epochs == 0:
             continue
 
@@ -167,7 +168,7 @@ def main(schema='bethesda'):
             if save_every != 0 and epoch % save_every == 0:
                 pd.DataFrame(history).to_csv(log_root / 'downstream_history.csv', index=False)
                 save_checkpoint(
-                    classifier, optimizer, None, epoch, result, output_dir / 'checkpoint' / 'last_vit_classifier.pt'
+                    classifier, optimizer, None, epoch, result, phase_idx, output_dir / 'checkpoint' / 'last_vit_classifier.pt'
                 )
 
             if early_stopping.step(eval_loss):
