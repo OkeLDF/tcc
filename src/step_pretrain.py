@@ -22,7 +22,7 @@ from concat_datasets import (
 )
 from image_transforms import SimCLRTransform
 from log import logger
-from utils import EarlyStopping, epoch_stats, save_checkpoint, _mem
+from utils import EarlyStopping, epoch_stats, save_checkpoint, load_checkpoint, _mem
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -94,7 +94,7 @@ def main():
         persistent_workers=num_workers > 0,
     )
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, **loader_options)
-    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, **loader_options)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, drop_last=True, **loader_options)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f'Running pretraining on {device}')
@@ -140,8 +140,6 @@ def main():
     autocast_dtype = torch.bfloat16
     scaler = None
 
-    stop_training = False
-    completed_epochs = 0
     for phase_idx, (phase, epochs, learning_rate, encoder_trainable) in enumerate(phases):
         if epochs == 0 or phase_idx < resume_phase:
             continue
@@ -173,7 +171,6 @@ def main():
             train_loss = pretraining.train_step(
                 lora_vit, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
             eval_loss = pretraining.eval_step(lora_vit, valid_loader, criterion, device=device)
-            completed_epochs += 1
             
             result = {
                 'epoch': epoch,
@@ -200,12 +197,11 @@ def main():
                     **checkpoint_args,
                     epoch=epoch,
                     metrics=result,
-                    path=checkpoint_dir / 'vit_pretrained_encoder.pt'
+                    path=output_dir / 'vit_pretrained_encoder.pt'
                 )
 
             if early_stopping.step(eval_loss):
                 logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
-                stop_training = True
                 break
                 
             _mem(f"epoch {epoch} end")
