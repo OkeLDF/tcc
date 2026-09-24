@@ -73,3 +73,31 @@ labels are on *.csv files, and disposed on 3 levels:
 
     level 3:
     [nan, 'AGC-ECC-NOS', 'AGC-EMC-NOS', 'ADC-ECC', 'ADC-EMC']
+
+Papicito/
+├── Citologia convencional
+│   ├── CA_Carcinoma escamoso
+│   ├── HSIL_lesão intraepitelial de alto grau
+│   ├── LSIL_lesão intraepitelial de baixo grau
+│   └── NILM_Negativo para lesão intraepitelial ou malignidade
+│       ├── Atrofia
+│       └── Metaplasia
+├── Citologia em meio líquido
+│   ├── CA_carcinoma escamoso
+│   ├── HSIL_lesão intraepitelial de alto grau
+│   ├── LSIL_lesão intraepitelial de baixo grau
+│   └── NILM_negativo para lesão intraepitelial ou malignidade
+│       ├── Metaplasia
+│       └── Trichomonas
+└── Outras
+    └── imagens
+        ├── CA_nao_queratinizante
+        ├── Celulas_ASCH
+        ├── Celulas_ASCUS
+        ├── Celulas_Intermediarias
+        ├── Celulas_Metaplasicas
+        ├── Celulas_Parabasais
+        ├── Celulas_Superficiais
+        ├── HSIL
+        ├── LSIL
+        └── Todas juntas
