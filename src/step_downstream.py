@@ -12,6 +12,8 @@ from torchmetrics.classification import MulticlassAUROC, MulticlassAveragePrecis
 
 from model import LoRAViTModel, LoRAViTClassifier
 
+# from transformers import ViTModel, ViTConfig, ViTForImageClassification
+
 import downstream
 
 from concat_datasets import (BETHESDA_CLASSES, BETHESDA_LABEL_MAPS, MORPHOLOGICAL_CLASSES,
@@ -76,6 +78,7 @@ def main(schema='bethesda'):
     data_root = PROJECT_ROOT / configs['PROJECT_DATA']
     log_root = PROJECT_ROOT / configs['PROJECT_LOG']
     log_root.mkdir(parents=True, exist_ok=True)
+    from_pretrained = str(configs['DOWNSTREAM']['FROM_PRETRAINED'])
     num_workers = int(configs['DATA']['NUM_WORKERS'])
     batch_size = int(configs['DOWNSTREAM']['BATCH_SIZE'])
     save_every = int(configs['DOWNSTREAM']['SAVE_EVERY'])
