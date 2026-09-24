@@ -186,7 +186,15 @@ def main(schema='bethesda'):
             break
 
     pd.DataFrame(history).to_csv(log_root / 'downstream_history.csv', index=False)
-    save_checkpoint(classifier, optimizer, None, sum(phase[1] for phase in phases), result, output_dir / 'vit_classifier.pt')
+    save_checkpoint(
+        model=classifier,
+        optimizer=optimizer,
+        scheduler=None,
+        epoch=sum(phase[1] for phase in phases),
+        phase=phase_idx,
+        metrics=result,
+        path=output_dir / 'vit_classifier.pt'
+    )
 
 if __name__ == '__main__':
     main()
