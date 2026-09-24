@@ -111,7 +111,6 @@ def main():
     output_dir = PROJECT_ROOT / configs['PATH_PRETRAINED']
     checkpoint_dir = output_dir / 'checkpoint'
     history = []
-    early_stopping = EarlyStopping(patience=5)
     phases = [
         ('frozen', int(configs['PRETRAINING']['FROZEN_EPOCHS']), float(configs['PRETRAINING']['FROZEN_LR']), False),
         ('unfrozen', int(configs['PRETRAINING']['UNFROZEN_EPOCHS']), float(configs['PRETRAINING']['UNFROZEN_LR']), True),
@@ -153,6 +152,16 @@ def main():
             lr=learning_rate,
         )
         
+        early_stopping = EarlyStopping(patience=5)
+        best_score = float('inf')
+
+        checkpoint_args = dict(
+            model=lora_vit,
+            optimizer=optimizer,
+            scheduler=None,
+            phase=phase_idx,
+        )
+        
         first_epoch = 0
         if phase_idx == resume_phase:
             first_epoch = resume_epoch
@@ -178,7 +187,21 @@ def main():
 
             if save_every != 0 and epoch % save_every == 0:
                 pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
-                save_checkpoint(lora_vit, optimizer, None, epoch, phase_idx, result, checkpoint_dir / 'last_vit_pretrained_encoder.pt')
+                save_checkpoint(
+                    **checkpoint_args,
+                    epoch=epoch,
+                    metrics=result,
+                    path=checkpoint_dir / 'last_vit_pretrained_encoder.pt'
+                )
+            
+            if eval_loss < best_score:
+                best_score = eval_loss
+                save_checkpoint(
+                    **checkpoint_args,
+                    epoch=epoch,
+                    metrics=result,
+                    path=checkpoint_dir / 'vit_pretrained_encoder.pt'
+                )
 
             if early_stopping.step(eval_loss):
                 logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
@@ -189,11 +212,7 @@ def main():
             torch.cuda.empty_cache()
             _mem(f"epoch {epoch} end (post empty_cache)")
 
-        if stop_training:
-            break
-
     pd.DataFrame(history).to_csv(log_root / 'pretraining_history.csv', index=False)
-    save_checkpoint(lora_vit, optimizer, None, completed_epochs, phase_idx, history[-1] if history else {}, output_dir / 'vit_pretrained_encoder.pt')
 
 
 if __name__ == '__main__':

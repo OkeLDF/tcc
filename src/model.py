@@ -27,9 +27,11 @@ class LoRAViTModel(nn.Module):
 
         self.projector = nn.Sequential(nn.Linear(768, 768), nn.ReLU(), nn.Linear(768, 128)).to(device)
 
-    def forward(self, pixel_values):
+    def forward(self, pixel_values, return_features=False):
         outputs = self.encoder(pixel_values=pixel_values)
         cls_token = outputs.last_hidden_state[:, 0, :].clone()
+        if return_features:
+            return cls_token
         return self.projector(cls_token)
 
 
@@ -41,13 +43,13 @@ class LoRAViTClassifier(nn.Module):
         self.encoder = lora_vit_model
         self.classes = classes
 
-        self.classifier = nn.Linear(128, len(classes))
+        self.classifier = nn.Linear(768, len(classes))
         self.classifier.to(device)
 
-        self.id2label = dict(enumerate(classes)),
-        self.label2id = {label: i for i, label in enumerate(classes)},
+        self.id2label = dict(enumerate(classes))
+        self.label2id = {label: i for i, label in enumerate(classes)}
 
     def forward(self, pixel_values):
-        embeddings = self.encoder(pixel_values)
-        logits = self.classifier(embeddings)
+        features = self.encoder(pixel_values, return_features=True)
+        logits = self.classifier(features)
         return logits

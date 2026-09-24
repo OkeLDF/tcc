@@ -12,8 +12,6 @@ from torchmetrics.classification import MulticlassAUROC, MulticlassAveragePrecis
 
 from model import LoRAViTModel, LoRAViTClassifier
 
-# from transformers import ViTModel, ViTConfig, ViTForImageClassification
-
 import downstream
 
 from concat_datasets import (BETHESDA_CLASSES, BETHESDA_LABEL_MAPS, MORPHOLOGICAL_CLASSES,
@@ -28,10 +26,14 @@ from log import logger
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _set_trainable(module, enabled):
-    for parameter in module.parameters():
-        parameter.requires_grad = enabled
+# def _set_trainable(module, enabled):
+#     for parameter in module.parameters():
+#         parameter.requires_grad = enabled
 
+def _set_trainable_lora(peft_model, enabled):
+    for name, parameter in peft_model.named_parameters():
+        if 'lora_' in name:
+            parameter.requires_grad = enabled
 
 def _datasets(schema, data_root, configs, transform, test_size):
     if schema == 'bethesda':
@@ -110,23 +112,32 @@ def main(schema='bethesda'):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f'Running downstream on {device}')
-
-    checkpoint_path = PROJECT_ROOT / configs['PATH_PRETRAINED'] / 'vit_pretrained_encoder.pt'
-
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f'Pretrained encoder not found: {checkpoint_path}')
-
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
-
+    
     lora_args = configs['PRETRAINING']['LORA']
     r       = lora_args.get('R', 8)
     alpha   = lora_args.get('ALPHA', 16)
     dropout = lora_args.get('DROPOUT', 0.0)
-    
-    lora_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
-    lora_vit.load_state_dict(checkpoint['model_state'])
 
-    classifier = LoRAViTClassifier(lora_vit, classes)
+    if from_pretrained == 'local':
+        checkpoint_path = PROJECT_ROOT / configs['PATH_PRETRAINED'] / 'vit_pretrained_encoder.pt'
+    
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f'Pretrained encoder not found: {checkpoint_path}')
+    
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+        
+        lora_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
+        lora_vit.load_state_dict(checkpoint['model_state'])
+    
+        classifier = LoRAViTClassifier(lora_vit, classes, device=device)
+    
+    elif from_pretrained == 'base':
+        base_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
+        
+        classifier = LoRAViTClassifier(base_vit, classes, device=device)
+
+    else:
+        raise ValueError(f"Invalid `from_pretrained`. Should be 'local' or 'base', but got: {from_pretrained!r}")
 
     criterion = nn.CrossEntropyLoss()
 
@@ -136,6 +147,8 @@ def main(schema='bethesda'):
     ]
 
     history = []
+    history_path = log_root / f'downstream_history_{schema}_{from_pretrained}.csv'
+    run_dir = output_dir / from_pretrained
 
     metrics = MetricCollection({
         'auroc': MulticlassAUROC(num_classes=len(classes)),
@@ -143,16 +156,24 @@ def main(schema='bethesda'):
         'recall': MulticlassRecall(num_classes=len(classes), average='macro'),
     }).to(device)
 
-    early_stopping = EarlyStopping(patience=5)
-
     stop_training = False
     for phase_idx, (phase, epochs, learning_rate, encoder_trainable) in enumerate(phases):
         if epochs == 0:
             continue
 
-        _set_trainable(classifier.encoder, encoder_trainable)
+        early_stopping = EarlyStopping(patience=5)
+        best_score = float('inf')
+
+        _set_trainable_lora(classifier.encoder, encoder_trainable)
         optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, classifier.parameters()), lr=learning_rate)
 
+        checkpoint_args = dict(
+            model=classifier,
+            optimizer=optimizer,
+            scheduler=None,
+            phase=phase_idx,
+        )
+        
         for epoch in range(epochs):
             train_loss = downstream.train_step(classifier, train_loader, criterion, optimizer, device=device)
             metrics.reset()
@@ -168,36 +189,30 @@ def main(schema='bethesda'):
             epoch_stats(epoch, result)
             history.append(result)
 
-            if save_every != 0 and epoch % save_every == 0:
-                pd.DataFrame(history).to_csv(log_root / 'downstream_history.csv', index=False)
+            if eval_loss < best_score:
+                best_score = eval_loss
                 save_checkpoint(
-                    model=classifier,
-                    optimizer=optimizer,
-                    scheduler=None,
+                    **checkpoint_args,
                     epoch=epoch,
-                    phase=phase_idx,
                     metrics=result,
-                    path=output_dir / 'checkpoint' / 'last_vit_classifier.pt'
+                    path=run_dir / f'vit_classifier_{phase}.pt'
+                )
+                
+
+            if save_every != 0 and epoch % save_every == 0:
+                pd.DataFrame(history).to_csv(history_path, index=False)
+                save_checkpoint(
+                    **checkpoint_args,
+                    epoch=epoch,
+                    metrics=result,
+                    path=run_dir / 'checkpoint' / 'last_vit_classifier.pt'
                 )
 
             if early_stopping.step(eval_loss):
                 logger.warning(f'EarlyStopping stopped execution at epoch {epoch} in {phase} phase')
-                stop_training = True
                 break
 
-        if stop_training:
-            break
-
-    pd.DataFrame(history).to_csv(log_root / 'downstream_history.csv', index=False)
-    save_checkpoint(
-        model=classifier,
-        optimizer=optimizer,
-        scheduler=None,
-        epoch=sum(phase[1] for phase in phases),
-        phase=phase_idx,
-        metrics=result,
-        path=output_dir / 'vit_classifier.pt'
-    )
+    pd.DataFrame(history).to_csv(history_path, index=False)
 
 if __name__ == '__main__':
     main()
