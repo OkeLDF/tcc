@@ -156,7 +156,6 @@ def main(schema='bethesda'):
         'recall': MulticlassRecall(num_classes=len(classes), average='macro'),
     }).to(device)
 
-    stop_training = False
     for phase_idx, (phase, epochs, learning_rate, encoder_trainable) in enumerate(phases):
         if epochs == 0:
             continue

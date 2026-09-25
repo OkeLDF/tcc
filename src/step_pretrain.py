@@ -151,7 +151,10 @@ def main():
         )
         
         early_stopping = EarlyStopping(patience=5)
-        best_score = float('inf')
+        best_score = min(
+            (r['eval_loss'] for r in history if r.get('phase_idx') == phase_idx),
+            default=float('inf'),
+        )
 
         checkpoint_args = dict(
             model=lora_vit,
