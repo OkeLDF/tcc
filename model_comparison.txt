@@ -1,5 +1,5 @@
 FROM_PRETRAINED: base
-FROZEN_EPOCHS: 36/40
+FROZEN_EPOCHS: 37/40
 
  epoch: 36
  phase: frozen
@@ -28,17 +28,17 @@ train_loss: __
 ______________________________
 
 FROM_PRETRAINED: local
-FROZEN_EPOCHS: __/40
+FROZEN_EPOCHS: 40/40
 
- epoch: __
+ epoch: 39
  phase: frozen
 schema: bethesda
 
-train_loss: __
- eval_loss: __
-     auroc: __
-  avg_prec: __
-    recall: __
+train_loss: 0.5490815679711032
+ eval_loss: 0.6186832542583155
+     auroc: 0.9463192224502563
+  avg_prec: 0.6949825882911682
+    recall: 0.5922207832336426
 ______________________________
 
 FROM_PRETRAINED: local
