@@ -1,0 +1,59 @@
+FROM_PRETRAINED: base
+FROZEN_EPOCHS: 36/40
+
+ epoch: 36
+ phase: frozen
+schema: bethesda
+
+train_loss: 0.6668381288827184
+ eval_loss: 0.7422534467836306
+     auroc: 0.9189690351486206
+  avg_prec: 0.6154529452323914
+    recall: 0.4995457530021667
+    
+______________________________
+
+FROM_PRETRAINED: base
+FROZEN_EPOCHS: __/40
+
+ epoch: __
+ phase: frozen
+schema: morphology
+
+train_loss: __
+ eval_loss: __
+     auroc: __
+  avg_prec: __
+    recall: __
+______________________________
+
+FROM_PRETRAINED: local
+FROZEN_EPOCHS: __/40
+
+ epoch: __
+ phase: frozen
+schema: bethesda
+
+train_loss: __
+ eval_loss: __
+     auroc: __
+  avg_prec: __
+    recall: __
+______________________________
+
+FROM_PRETRAINED: local
+FROZEN_EPOCHS: __/40
+
+ epoch: __
+ phase: frozen
+schema: morphology
+
+train_loss: __
+ eval_loss: __
+     auroc: __
+  avg_prec: __
+    recall: __
+______________________________
+
+
+
