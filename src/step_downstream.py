@@ -19,7 +19,7 @@ from concat_datasets import (BETHESDA_CLASSES, BETHESDA_LABEL_MAPS, MORPHOLOGICA
     SIPaKMeDDataset, build_downstream_dataset)
 
 from image_transforms import EvaluationTransform
-from utils import save_checkpoint, epoch_stats, EarlyStopping
+from utils import save_checkpoint, load_checkpoint, epoch_stats, EarlyStopping
 from log import logger
 
 
@@ -35,7 +35,7 @@ def _set_trainable_lora(peft_model, enabled):
         if 'lora_' in name:
             parameter.requires_grad = enabled
 
-def _datasets(schema, data_root, configs, transform, test_size):
+def _datasets(schema, data_root, configs, transform, test_size, validation_size):
     if schema == 'bethesda':
         classes, label_maps = BETHESDA_CLASSES, BETHESDA_LABEL_MAPS
         dataset_types = [MendeleyLBCDataset, CPSMI2025Dataset, BTMDataset, HiCervixDataset, PapicitoDataset]
@@ -48,11 +48,12 @@ def _datasets(schema, data_root, configs, transform, test_size):
         ]
     elif schema == 'morphological':
         classes, label_maps = MORPHOLOGICAL_CLASSES, MORPHOLOGICAL_LABEL_MAPS
-        dataset_types = [HerlevDataset, SIPaKMeDDataset, HiCervixDataset]
+        dataset_types = [HerlevDataset, SIPaKMeDDataset, HiCervixDataset, PapicitoDataset]
         paths = [
             data_root / configs['PATH_HERLEV'],
             data_root / configs['PATH_SIPAKMED'],
             data_root / configs['PATH_HICERVIX'],
+            data_root / configs['PATH_PAPICITO'],
         ]
     else:
         raise ValueError(f'Unknown schema: {schema!r}')
@@ -65,6 +66,7 @@ def _datasets(schema, data_root, configs, transform, test_size):
                 split=split,
                 transform=transform,
                 test_size=test_size,
+                validation_size=validation_size,
                 **({'label_level': 2 if schema == 'bethesda' else 1}
                    if dataset_type is HiCervixDataset else {}),
             )
@@ -72,7 +74,7 @@ def _datasets(schema, data_root, configs, transform, test_size):
         ]
         return build_downstream_dataset(instances, label_maps, classes)
 
-    return build('train'), build('test'), classes
+    return build('train'), build('valid'), build('test'), classes
 
 
 def main(schema='bethesda'):
@@ -87,8 +89,9 @@ def main(schema='bethesda'):
     output_dir = PROJECT_ROOT / configs['PATH_FINETUNED'] / schema
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    train_dataset, test_dataset, classes = _datasets(
-        schema, data_root, configs, EvaluationTransform(), float(configs['DATA']['TEST_SIZE'])
+    train_dataset, valid_dataset, test_dataset, classes = _datasets(
+        schema, data_root, configs, EvaluationTransform(),
+        float(configs['DATA']['TEST_SIZE']), float(configs['PRETRAINING']['VALIDATION_SIZE'])
     )
 
     loader_options = dict(
@@ -101,6 +104,12 @@ def main(schema='bethesda'):
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
+        **loader_options
+    )
+    valid_loader = DataLoader(
+        valid_dataset,
+        batch_size=batch_size,
+        shuffle=False,
         **loader_options
     )
     test_loader = DataLoader(
@@ -148,6 +157,7 @@ def main(schema='bethesda'):
 
     history = []
     history_path = log_root / f'downstream_history_{schema}_{from_pretrained}.csv'
+    test_results_path = log_root / f'downstream_test_{schema}_{from_pretrained}.csv'
     run_dir = output_dir / from_pretrained
 
     metrics = MetricCollection({
@@ -176,7 +186,7 @@ def main(schema='bethesda'):
         for epoch in range(epochs):
             train_loss = downstream.train_step(classifier, train_loader, criterion, optimizer, device=device)
             metrics.reset()
-            eval_loss = downstream.eval_step(classifier, test_loader, criterion, metrics=metrics, device=device)
+            eval_loss = downstream.eval_step(classifier, valid_loader, criterion, metrics=metrics, device=device)
 
             result = {
                 'epoch': epoch,
@@ -212,6 +222,25 @@ def main(schema='bethesda'):
                 break
 
     pd.DataFrame(history).to_csv(history_path, index=False)
+
+    # The test set is used only here, once per phase, on the checkpoint that
+    # had the lowest validation loss in that phase.
+    test_results = []
+    for phase, epochs, _, _ in phases:
+        best_path = run_dir / f'vit_classifier_{phase}.pt'
+        if epochs == 0 or not best_path.exists():
+            continue
+
+        checkpoint = load_checkpoint(classifier, best_path, device)
+        metrics.reset()
+        test_loss = downstream.eval_step(classifier, test_loader, criterion, metrics=metrics, device=device)
+
+        result = {'phase': phase, 'best_epoch': checkpoint['epoch'], 'test_loss': test_loss}
+        result.update({name: float(value) for name, value in metrics.compute().items()})
+        logger.info(f'[test] {result}')
+        test_results.append(result)
+
+    pd.DataFrame(test_results).to_csv(test_results_path, index=False)
 
 if __name__ == '__main__':
     main()

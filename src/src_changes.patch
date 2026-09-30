@@ -1,0 +1,253 @@
+diff -ru -x __pycache__ -x .ruff_cache /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/configs.yaml src/configs.yaml
+--- /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/configs.yaml	2026-09-29 16:48:59.418358833 -0300
++++ src/configs.yaml	2026-09-29 16:49:31.934663647 -0300
+@@ -22,8 +22,8 @@
+   FROZEN_EPOCHS:   5
+   UNFROZEN_EPOCHS: 45
+ 
+-  FROZEN_LR:   0.0001 # 1e-4
+-  UNFROZEN_LR: 0.001  # 1e-3
++  FROZEN_LR:   0.001  # 1e-3
++  UNFROZEN_LR: 0.0001 # 1e-4
+   TEMPERATURE: 0.5
+   VALIDATION_SIZE: 0.10
+   SAVE_EVERY: 3
+@@ -42,6 +42,6 @@
+   FROZEN_EPOCHS:   10
+   UNFROZEN_EPOCHS: 40
+ 
+-  FROZEN_LR:   0.0001 # 1e-4
+-  UNFROZEN_LR: 0.001  # 1e-3
++  FROZEN_LR:   0.001  # 1e-3
++  UNFROZEN_LR: 0.0001 # 1e-4
+   SAVE_EVERY: 3
+diff -ru -x __pycache__ -x .ruff_cache /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/data.py src/data.py
+--- /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/data.py	2026-09-29 16:48:59.418358833 -0300
++++ src/data.py	2026-09-29 16:49:47.094805761 -0300
+@@ -23,9 +23,6 @@
+     assert not (task == 'pretraining' and split == 'test'), (
+         "`split` can't be 'test' on unsupervised pretraining. Use split='train' or split='valid'."
+     )
+-    assert not (task == 'downstream' and split == 'valid'), (
+-        "`split='valid'` is reserved for unsupervised pretraining."
+-    )
+     assert Path(path).exists(), f"Path {path!r} does not exist."
+ 
+ 
+@@ -62,11 +59,13 @@
+         task='pretraining', split='train'   -> SimCLR training partition
+         task='pretraining', split='valid'   -> SimCLR validation partition
+         task='downstream',  split='train'   -> the same training partition
++        task='downstream',  split='valid'   -> the same validation partition
+         task='downstream',  split='test'    -> held-out test partition
+ 
+     This is inductive self-supervised learning: pretraining and supervised
+-    finetuning may see the same training images, but the test images remain
+-    unseen until final evaluation. Labels are never returned for pretraining.
++    finetuning see the same training images and are validated on the same
++    validation images, but the test images remain unseen until final
++    evaluation. Labels are never returned for pretraining.
+     """
+ 
+     def __init__(self, path, split='train', task='pretraining', transform=None,
+@@ -104,17 +103,17 @@
+             random_state=RANDOM_STATE,
+         )
+ 
+-        if self.task == 'downstream':
+-            return self.samples[train_idx] if self.split == 'train' else self.samples[test_idx]
++        if self.split == 'test':
++            return self.samples[test_idx]
+ 
+-        ssl_train_idx, ssl_valid_idx = train_test_split(
++        fit_idx, valid_idx = train_test_split(
+             train_idx,
+             test_size=validation_size,
+             stratify=labels[train_idx],
+             shuffle=True,
+             random_state=RANDOM_STATE,
+         )
+-        return self.samples[ssl_train_idx] if self.split == 'train' else self.samples[ssl_valid_idx]
++        return self.samples[fit_idx] if self.split == 'train' else self.samples[valid_idx]
+ 
+     def __len__(self):
+         return len(self.samples)
+@@ -172,9 +171,10 @@
+     """
+     Layout: <path>/{train,test}/<class>/*.bmp
+ 
+-    The dataset's supplied split is preserved: images under ``train`` feed
+-    pretraining and downstream training, while images under ``test`` are used
+-    only for downstream evaluation.
++    The dataset's supplied split is preserved: images under ``train`` are
++    split into the training and validation partitions of both pretraining
++    and downstream, while images under ``test`` are used only for downstream
++    evaluation.
+     """
+ 
+     def _collect_samples(self):
+@@ -192,19 +192,18 @@
+             sample for sample in self.samples
+             if Path(sample[0]).parents[1].name == 'train'
+         ]
+-        if self.task == 'pretraining':
++        if self.split == 'test':
++            selected = [
++                sample for sample in self.samples
++                if Path(sample[0]).parents[1].name == 'test'
++            ]
++        else:
+             labels = np.array(train_samples)[:, 1]
+             train_idx, valid_idx = train_test_split(
+                 np.arange(len(train_samples)), test_size=validation_size,
+                 stratify=labels, shuffle=True, random_state=RANDOM_STATE,
+             )
+             selected = np.array(train_samples)[train_idx if self.split == 'train' else valid_idx]
+-        else:
+-            selected_folder = self.split
+-            selected = [
+-                sample for sample in self.samples
+-                if Path(sample[0]).parents[1].name == selected_folder
+-            ]
+         assert len(selected), f'No samples found in Herlev {self.split!r} split.'
+         return np.array(selected)
+ 
+diff -ru -x __pycache__ -x .ruff_cache /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/image_transforms.py src/image_transforms.py
+--- /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/image_transforms.py	2026-09-29 16:48:59.418358833 -0300
++++ src/image_transforms.py	2026-09-29 16:49:31.934663647 -0300
+@@ -4,11 +4,12 @@
+ from torchvision import transforms
+ 
+ 
+-# ImageNet normalization is appropriate for initialization from the public ViT
+-# checkpoint. It also keeps the input contract identical for both stages.
++# Same normalization as the preprocessor of google/vit-base-patch16-224
++# (inputs scaled to [-1, 1]). It also keeps the input contract identical for
++# both stages.
+ IMAGE_SIZE = 224
+-MEAN = (0.485, 0.456, 0.406)
+-STD = (0.229, 0.224, 0.225)
++MEAN = (0.5, 0.5, 0.5)
++STD = (0.5, 0.5, 0.5)
+ 
+ 
+ class SimCLRTransform:
+diff -ru -x __pycache__ -x .ruff_cache /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/step_downstream.py src/step_downstream.py
+--- /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/src_orig/step_downstream.py	2026-09-29 16:48:59.418358833 -0300
++++ src/step_downstream.py	2026-09-29 16:50:06.340986179 -0300
+@@ -19,7 +19,7 @@
+     SIPaKMeDDataset, build_downstream_dataset)
+ 
+ from image_transforms import EvaluationTransform
+-from utils import save_checkpoint, epoch_stats, EarlyStopping
++from utils import save_checkpoint, load_checkpoint, epoch_stats, EarlyStopping
+ from log import logger
+ 
+ 
+@@ -35,7 +35,7 @@
+         if 'lora_' in name:
+             parameter.requires_grad = enabled
+ 
+-def _datasets(schema, data_root, configs, transform, test_size):
++def _datasets(schema, data_root, configs, transform, test_size, validation_size):
+     if schema == 'bethesda':
+         classes, label_maps = BETHESDA_CLASSES, BETHESDA_LABEL_MAPS
+         dataset_types = [MendeleyLBCDataset, CPSMI2025Dataset, BTMDataset, HiCervixDataset, PapicitoDataset]
+@@ -48,11 +48,12 @@
+         ]
+     elif schema == 'morphological':
+         classes, label_maps = MORPHOLOGICAL_CLASSES, MORPHOLOGICAL_LABEL_MAPS
+-        dataset_types = [HerlevDataset, SIPaKMeDDataset, HiCervixDataset]
++        dataset_types = [HerlevDataset, SIPaKMeDDataset, HiCervixDataset, PapicitoDataset]
+         paths = [
+             data_root / configs['PATH_HERLEV'],
+             data_root / configs['PATH_SIPAKMED'],
+             data_root / configs['PATH_HICERVIX'],
++            data_root / configs['PATH_PAPICITO'],
+         ]
+     else:
+         raise ValueError(f'Unknown schema: {schema!r}')
+@@ -65,6 +66,7 @@
+                 split=split,
+                 transform=transform,
+                 test_size=test_size,
++                validation_size=validation_size,
+                 **({'label_level': 2 if schema == 'bethesda' else 1}
+                    if dataset_type is HiCervixDataset else {}),
+             )
+@@ -72,7 +74,7 @@
+         ]
+         return build_downstream_dataset(instances, label_maps, classes)
+ 
+-    return build('train'), build('test'), classes
++    return build('train'), build('valid'), build('test'), classes
+ 
+ 
+ def main(schema='bethesda'):
+@@ -87,8 +89,9 @@
+     output_dir = PROJECT_ROOT / configs['PATH_FINETUNED'] / schema
+     output_dir.mkdir(parents=True, exist_ok=True)
+ 
+-    train_dataset, test_dataset, classes = _datasets(
+-        schema, data_root, configs, EvaluationTransform(), float(configs['DATA']['TEST_SIZE'])
++    train_dataset, valid_dataset, test_dataset, classes = _datasets(
++        schema, data_root, configs, EvaluationTransform(),
++        float(configs['DATA']['TEST_SIZE']), float(configs['PRETRAINING']['VALIDATION_SIZE'])
+     )
+ 
+     loader_options = dict(
+@@ -103,6 +106,12 @@
+         shuffle=True,
+         **loader_options
+     )
++    valid_loader = DataLoader(
++        valid_dataset,
++        batch_size=batch_size,
++        shuffle=False,
++        **loader_options
++    )
+     test_loader = DataLoader(
+         test_dataset,
+         batch_size=batch_size,
+@@ -148,6 +157,7 @@
+ 
+     history = []
+     history_path = log_root / f'downstream_history_{schema}_{from_pretrained}.csv'
++    test_results_path = log_root / f'downstream_test_{schema}_{from_pretrained}.csv'
+     run_dir = output_dir / from_pretrained
+ 
+     metrics = MetricCollection({
+@@ -176,7 +186,7 @@
+         for epoch in range(epochs):
+             train_loss = downstream.train_step(classifier, train_loader, criterion, optimizer, device=device)
+             metrics.reset()
+-            eval_loss = downstream.eval_step(classifier, test_loader, criterion, metrics=metrics, device=device)
++            eval_loss = downstream.eval_step(classifier, valid_loader, criterion, metrics=metrics, device=device)
+ 
+             result = {
+                 'epoch': epoch,
+@@ -213,5 +223,24 @@
+ 
+     pd.DataFrame(history).to_csv(history_path, index=False)
+ 
++    # The test set is used only here, once per phase, on the checkpoint that
++    # had the lowest validation loss in that phase.
++    test_results = []
++    for phase, epochs, _, _ in phases:
++        best_path = run_dir / f'vit_classifier_{phase}.pt'
++        if epochs == 0 or not best_path.exists():
++            continue
++
++        checkpoint = load_checkpoint(classifier, best_path, device)
++        metrics.reset()
++        test_loss = downstream.eval_step(classifier, test_loader, criterion, metrics=metrics, device=device)
++
++        result = {'phase': phase, 'best_epoch': checkpoint['epoch'], 'test_loss': test_loss}
++        result.update({name: float(value) for name, value in metrics.compute().items()})
++        logger.info(f'[test] {result}')
++        test_results.append(result)
++
++    pd.DataFrame(test_results).to_csv(test_results_path, index=False)
++
+ if __name__ == '__main__':
+     main()

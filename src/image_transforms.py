@@ -4,11 +4,12 @@ from PIL import Image
 from torchvision import transforms
 
 
-# ImageNet normalization is appropriate for initialization from the public ViT
-# checkpoint. It also keeps the input contract identical for both stages.
+# Same normalization as the preprocessor of google/vit-base-patch16-224
+# (inputs scaled to [-1, 1]). It also keeps the input contract identical for
+# both stages.
 IMAGE_SIZE = 224
-MEAN = (0.485, 0.456, 0.406)
-STD = (0.229, 0.224, 0.225)
+MEAN = (0.5, 0.5, 0.5)
+STD = (0.5, 0.5, 0.5)
 
 
 class SimCLRTransform:
