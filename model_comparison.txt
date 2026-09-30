@@ -14,17 +14,17 @@ train_loss: 0.6668381288827184
 ______________________________
 
 FROM_PRETRAINED: base
-FROZEN_EPOCHS: __/40
+FROZEN_EPOCHS: 37/40
 
- epoch: __
+ epoch: 36
  phase: frozen
 schema: morphology
 
-train_loss: __
- eval_loss: __
-     auroc: __
-  avg_prec: __
-    recall: __
+train_loss: 0.4375092588260978
+ eval_loss: 0.45874850399844297
+     auroc: 0.8618195056915283
+  avg_prec: 0.8561268448829651
+    recall: 0.7739371657371521
 ______________________________
 
 FROM_PRETRAINED: local
