@@ -23,9 +23,6 @@ def assert_dataset_attributes(path, split, task):
     assert not (task == 'pretraining' and split == 'test'), (
         "`split` can't be 'test' on unsupervised pretraining. Use split='train' or split='valid'."
     )
-    assert not (task == 'downstream' and split == 'valid'), (
-        "`split='valid'` is reserved for unsupervised pretraining."
-    )
     assert Path(path).exists(), f"Path {path!r} does not exist."
 
 
@@ -62,11 +59,13 @@ class BaseCervicalCytologyDataset(Dataset):
         task='pretraining', split='train'   -> SimCLR training partition
         task='pretraining', split='valid'   -> SimCLR validation partition
         task='downstream',  split='train'   -> the same training partition
+        task='downstream',  split='valid'   -> the same validation partition
         task='downstream',  split='test'    -> held-out test partition
 
     This is inductive self-supervised learning: pretraining and supervised
-    finetuning may see the same training images, but the test images remain
-    unseen until final evaluation. Labels are never returned for pretraining.
+    finetuning see the same training images and are validated on the same
+    validation images, but the test images remain unseen until final
+    evaluation. Labels are never returned for pretraining.
     """
 
     def __init__(self, path, split='train', task='pretraining', transform=None,
@@ -104,17 +103,17 @@ class BaseCervicalCytologyDataset(Dataset):
             random_state=RANDOM_STATE,
         )
 
-        if self.task == 'downstream':
-            return self.samples[train_idx] if self.split == 'train' else self.samples[test_idx]
+        if self.split == 'test':
+            return self.samples[test_idx]
 
-        ssl_train_idx, ssl_valid_idx = train_test_split(
+        fit_idx, valid_idx = train_test_split(
             train_idx,
             test_size=validation_size,
             stratify=labels[train_idx],
             shuffle=True,
             random_state=RANDOM_STATE,
         )
-        return self.samples[ssl_train_idx] if self.split == 'train' else self.samples[ssl_valid_idx]
+        return self.samples[fit_idx] if self.split == 'train' else self.samples[valid_idx]
 
     def __len__(self):
         return len(self.samples)
@@ -172,9 +171,10 @@ class HerlevDataset(BaseCervicalCytologyDataset):
     """
     Layout: <path>/{train,test}/<class>/*.bmp
 
-    The dataset's supplied split is preserved: images under ``train`` feed
-    pretraining and downstream training, while images under ``test`` are used
-    only for downstream evaluation.
+    The dataset's supplied split is preserved: images under ``train`` are
+    split into the training and validation partitions of both pretraining
+    and downstream, while images under ``test`` are used only for downstream
+    evaluation.
     """
 
     def _collect_samples(self):
@@ -192,19 +192,18 @@ class HerlevDataset(BaseCervicalCytologyDataset):
             sample for sample in self.samples
             if Path(sample[0]).parents[1].name == 'train'
         ]
-        if self.task == 'pretraining':
+        if self.split == 'test':
+            selected = [
+                sample for sample in self.samples
+                if Path(sample[0]).parents[1].name == 'test'
+            ]
+        else:
             labels = np.array(train_samples)[:, 1]
             train_idx, valid_idx = train_test_split(
                 np.arange(len(train_samples)), test_size=validation_size,
                 stratify=labels, shuffle=True, random_state=RANDOM_STATE,
             )
             selected = np.array(train_samples)[train_idx if self.split == 'train' else valid_idx]
-        else:
-            selected_folder = self.split
-            selected = [
-                sample for sample in self.samples
-                if Path(sample[0]).parents[1].name == selected_folder
-            ]
         assert len(selected), f'No samples found in Herlev {self.split!r} split.'
         return np.array(selected)
 

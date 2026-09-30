@@ -54,7 +54,7 @@ def scale_clip_and_step_f16(lora_vit, scaler, optimizer, autocast_dtype):
         optimizer.step()
 
 
-def train_step(lora_vit, loader, contrastive_loss, optimizer, scheduler=None, device:str='cuda', accumulation_steps=1, autocast_dtype=None, scaler=None):
+def train_step(lora_vit, loader, contrastive_loss, optimizer, gpu_augmentation, scheduler=None, device:str='cuda', accumulation_steps=1, autocast_dtype=None, scaler=None):
     device_type = torch.device(device).type
     total_loss = torch.tensor(0.0, device=device)
     len_loader = len(loader)
@@ -66,9 +66,9 @@ def train_step(lora_vit, loader, contrastive_loss, optimizer, scheduler=None, de
     optimizer.zero_grad(set_to_none=True)
 
     for it, batch in enumerate(loader, 1):
-        aug_i = batch['augmented_i'].to(device)
-        aug_j = batch['augmented_j'].to(device)
-        pixel_values = torch.cat([aug_i, aug_j], dim=0)
+        aug_i = batch['augmented_i'].to(device, non_blocking=True)
+        aug_j = batch['augmented_j'].to(device, non_blocking=True)
+        pixel_values = gpu_augmentation(torch.cat([aug_i, aug_j], dim=0))
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
@@ -101,7 +101,7 @@ def train_step(lora_vit, loader, contrastive_loss, optimizer, scheduler=None, de
 
 
 @torch.inference_mode()
-def eval_step(lora_vit, loader, contrastive_loss, device: str = 'cuda', autocast_dtype=None):
+def eval_step(lora_vit, loader, contrastive_loss, gpu_augmentation, device: str = 'cuda', autocast_dtype=None):
     device_type = torch.device(device).type
     total_loss = torch.tensor(0.0, device=device)
     len_loader = len(loader)
@@ -109,9 +109,9 @@ def eval_step(lora_vit, loader, contrastive_loss, device: str = 'cuda', autocast
     lora_vit.eval()
 
     for it, batch in enumerate(loader, 1):
-        aug_i = batch['augmented_i'].to(device)
-        aug_j = batch['augmented_j'].to(device)
-        pixel_values = torch.cat([aug_i, aug_j], dim=0)
+        aug_i = batch['augmented_i'].to(device, non_blocking=True)
+        aug_j = batch['augmented_j'].to(device, non_blocking=True)
+        pixel_values = gpu_augmentation(torch.cat([aug_i, aug_j], dim=0))
 
         if autocast_dtype is not None:
             with torch.autocast(device_type=device_type, dtype=autocast_dtype):
