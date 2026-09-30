@@ -20,7 +20,7 @@ from concat_datasets import (
     PapicitoDataset,
     build_pretraining_dataset,
 )
-from image_transforms import SimCLRTransform
+from image_transforms import SimCLRTransform, SimCLRGPUAugmentation
 from log import logger
 from utils import EarlyStopping, epoch_stats, save_checkpoint, load_checkpoint, _mem
 
@@ -105,6 +105,7 @@ def main():
     dropout = lora_args.get('DROPOUT', 0.0)
     
     lora_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
+    gpu_augmentation = SimCLRGPUAugmentation().to(device)
     
     criterion = pretraining.NTXentLoss(float(configs['PRETRAINING']['TEMPERATURE']))
 
@@ -172,8 +173,9 @@ def main():
         for epoch in range(first_epoch, epochs):
             _mem(f"epoch {epoch} start")
             train_loss = pretraining.train_step(
-                lora_vit, train_loader, criterion, optimizer, autocast_dtype=autocast_dtype, scaler=scaler, device=device)
-            eval_loss = pretraining.eval_step(lora_vit, valid_loader, criterion, device=device)
+                lora_vit, train_loader, criterion, optimizer, gpu_augmentation,
+                autocast_dtype=autocast_dtype, scaler=scaler, device=device)
+            eval_loss = pretraining.eval_step(lora_vit, valid_loader, criterion, gpu_augmentation, device=device)
             
             result = {
                 'epoch': epoch,
