@@ -6,13 +6,21 @@ from transformers import ViTModel, ViTConfig, ViTForImageClassification
 
 class LoRAViTModel(nn.Module):
 
-    def __init__(self, r=8, alpha=16, dropout=0.0, device='cuda'):
+    def __init__(self, r=8, alpha=16, dropout=0.0, gradient_checkpointing=False, device='cuda'):
         super().__init__()
         
         base_encoder = ViTModel.from_pretrained(
             'google/vit-base-patch16-224',
             add_pooling_layer=False
         ).to(device)
+
+        # Recomputes each transformer block's activations during backward
+        # instead of storing them, so training the LoRA adapters fits in
+        # limited GPU memory. Results are unchanged; only compute increases.
+        if gradient_checkpointing:
+            base_encoder.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={'use_reentrant': False}
+            )
         
         config = LoraConfig(
             r=r,
@@ -22,6 +30,13 @@ class LoRAViTModel(nn.Module):
         )
         
         self.encoder = get_peft_model(base_encoder, config)
+
+        # PEFT makes the embedding output require grad when checkpointing is
+        # on. That is only needed with use_reentrant=True; here it would force
+        # a useless backward pass through the frozen encoder in phase 1.
+        if gradient_checkpointing:
+            base_encoder.disable_input_require_grads()
+
         print('LoRA trainable parameters:')
         self.encoder.print_trainable_parameters()
 

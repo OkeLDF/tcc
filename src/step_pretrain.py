@@ -104,7 +104,11 @@ def main():
     alpha   = lora_args.get('ALPHA', 16)
     dropout = lora_args.get('DROPOUT', 0.0)
     
-    lora_vit = LoRAViTModel(r=r, alpha=alpha, dropout=dropout, device=device)
+    gradient_checkpointing = bool(configs['PRETRAINING'].get('GRADIENT_CHECKPOINTING', False))
+
+    lora_vit = LoRAViTModel(
+        r=r, alpha=alpha, dropout=dropout, gradient_checkpointing=gradient_checkpointing, device=device
+    )
     gpu_augmentation = SimCLRGPUAugmentation().to(device)
     
     criterion = pretraining.NTXentLoss(float(configs['PRETRAINING']['TEMPERATURE']))
