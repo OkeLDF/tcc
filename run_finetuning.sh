@@ -59,6 +59,7 @@ log_dir="$ROOT/$(config_value PROJECT_LOG)"
 finetuned_dir="$ROOT/$(config_value PATH_FINETUNED)"
 mkdir -p "$log_dir"
 failed_uploads=()
+failed_runs=()
 
 cd "$SRC"  # log.py writes training.log to the working directory
 for schema in "${SCHEMAS[@]}"; do
@@ -67,18 +68,26 @@ for schema in "${SCHEMAS[@]}"; do
     log_offset=$(stat -c %s training.log 2>/dev/null || echo 0)
 
     echo "=== Fine-tuning: schema=$schema, FROM_PRETRAINED=$condition ==="
-    "$PYTHON" run.py downstream --schema "$schema" 2>&1 | tee "$console_log"
+    # `if` keeps a failed run from aborting the script (set -e + pipefail),
+    # so the next schema still runs.
+    target="$condition"
+    if ! "$PYTHON" run.py downstream --schema "$schema" 2>&1 | tee "$console_log"; then
+        echo "Fine-tuning of $schema FAILED; uploading partial files to ${condition}_FAILED_${stamp}/" >&2
+        failed_runs+=("$schema")
+        target="${condition}_FAILED_${stamp}"
+    fi
 
     staging="$(mktemp -d "$ROOT/.upload_${schema}_XXXX")"
     mkdir -p "$staging/weights" "$staging/logs"
-    cp -r "$finetuned_dir/$schema/$condition/." "$staging/weights/"
-    cp "$log_dir/downstream_history_${schema}_${condition}.csv" "$staging/"
-    cp "$log_dir/downstream_test_${schema}_${condition}.csv" "$staging/"
-    tail -c +"$((log_offset + 1))" training.log > "$staging/logs/training.log"
+    # A failed run may not have produced every file: copy what exists.
+    cp -r "$finetuned_dir/$schema/$condition/." "$staging/weights/" 2>/dev/null || true
+    cp "$log_dir/downstream_history_${schema}_${condition}.csv" "$staging/" 2>/dev/null || true
+    cp "$log_dir/downstream_test_${schema}_${condition}.csv" "$staging/" 2>/dev/null || true
+    tail -c +"$((log_offset + 1))" training.log > "$staging/logs/training.log" 2>/dev/null || true
     cp "$console_log" "$staging/logs/"
     cp configs.yaml "$staging/"
 
-    if upload_run "$schema" "$condition" "$staging"; then
+    if upload_run "$schema" "$target" "$staging"; then
         rm -rf "$staging"
     else
         echo "Upload of $schema failed; files kept in $staging" >&2
@@ -86,8 +95,13 @@ for schema in "${SCHEMAS[@]}"; do
     fi
 done
 
+if ((${#failed_runs[@]})); then
+    echo "Runs that failed: ${failed_runs[*]}" >&2
+fi
 if ((${#failed_uploads[@]})); then
     echo "Uploads that failed: ${failed_uploads[*]}" >&2
+fi
+if ((${#failed_runs[@]} + ${#failed_uploads[@]})); then
     exit 1
 fi
 echo "Done."
