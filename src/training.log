@@ -39,3 +39,11 @@
 2026-09-03 23:46:36 [WARNING]: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 2026-09-03 23:46:36 [INFO]: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/google/vit-base-patch16-224/3f49326eb077187dfe1c2a2bb15fbd74e6ab91e3/config.json "HTTP/1.1 200 OK"
 2026-09-03 23:46:36 [INFO]: HTTP Request: HEAD https://huggingface.co/google/vit-base-patch16-224/resolve/main/model.safetensors "HTTP/1.1 302 Found"
+2026-10-02 19:49:11 [INFO]: Loaded checkpoint from /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/evalroot/finetuned/morphological/local/vit_classifier_frozen.pt (epoch 3, metrics {})
+2026-10-02 19:49:22 [INFO]: [eval] morphological/local/frozen (best epoch 3): recall=0.6849 auroc=0.7973 ap=0.7918
+2026-10-02 19:49:23 [INFO]: Loaded checkpoint from /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/evalroot/finetuned/morphological/local/vit_classifier_unfrozen.pt (epoch 3, metrics {})
+2026-10-02 19:49:24 [INFO]: [eval] morphological/local/unfrozen (best epoch 3): recall=0.4443 auroc=0.4704 ap=0.4959
+2026-10-02 19:49:49 [INFO]: Loaded checkpoint from /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/evalroot/finetuned/morphological/local/vit_classifier_frozen.pt (epoch 3, metrics {})
+2026-10-02 19:49:54 [INFO]: [eval] morphological/local/frozen (best epoch 3): recall=0.5000 auroc=0.1830 ap=0.3566
+2026-10-02 19:49:54 [INFO]: Loaded checkpoint from /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/evalroot/finetuned/morphological/local/vit_classifier_unfrozen.pt (epoch 3, metrics {})
+2026-10-02 19:49:56 [INFO]: [eval] morphological/local/unfrozen (best epoch 3): recall=0.5000 auroc=0.1830 ap=0.3566
