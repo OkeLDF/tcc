@@ -57,3 +57,7 @@
 2026-10-03 01:03:35 [INFO]: [eval] bethesda/local/frozen (best epoch 8): recall=0.5839 auroc=0.9461 ap=0.7029
 2026-10-03 01:03:36 [INFO]: Loaded checkpoint from /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_unfrozen.pt (epoch 3, metrics {'epoch': 3.0, 'train_loss': 0.2850217292645226, 'eval_loss': 0.5169589962579507, 'auroc': 0.9658592939376831, 'average_precision': 0.7656600475311279, 'recall': 0.6790748834609985})
 2026-10-03 01:05:58 [INFO]: [eval] bethesda/local/unfrozen (best epoch 3): recall=0.6791 auroc=0.9642 ap=0.7695
+2026-10-03 01:11:04 [INFO]: Loaded checkpoint from /mnt/data/home/otavio/UEPG/tcc/finetuned/morphological/local/vit_classifier_frozen.pt (epoch 6, metrics {'epoch': 6.0, 'train_loss': 0.3782864294867465, 'eval_loss': 0.39216046863132054, 'auroc': 0.9035193920135498, 'average_precision': 0.9014865756034851, 'recall': 0.8122929334640503})
+2026-10-03 01:13:56 [INFO]: [eval] morphological/local/frozen (best epoch 6): recall=0.8135 auroc=0.9026 ap=0.8977
+2026-10-03 01:13:56 [INFO]: Loaded checkpoint from /mnt/data/home/otavio/UEPG/tcc/finetuned/morphological/local/vit_classifier_unfrozen.pt (epoch 1, metrics {'epoch': 1.0, 'train_loss': 0.26389171296192065, 'eval_loss': 0.29303834173414445, 'auroc': 0.9508056640625, 'average_precision': 0.950405478477478, 'recall': 0.8724508285522461})
+2026-10-03 01:16:50 [INFO]: [eval] morphological/local/unfrozen (best epoch 1): recall=0.8674 auroc=0.9444 ap=0.9442
