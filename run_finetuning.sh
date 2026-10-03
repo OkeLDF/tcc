@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Runs the downstream fine-tuning for each label schema and uploads the
-# results of each run to a private Hugging Face model repo:
-#   bethesda      -> okeldf/vit-cytology-bethesda
-#   morphological -> okeldf/vit-cytology-morphological
+# results of each run to a private Hugging Face model repo, chosen by
+# DOWNSTREAM.FROM_PRETRAINED in configs.yaml:
+#   local: bethesda      -> okeldf/vit-cytology-bethesda
+#          morphological -> okeldf/vit-cytology-morphological
+#   base:  bethesda      -> okeldf/vit-base-cytology-bethesda
+#          morphological -> okeldf/vit-base-cytology-morphological
 #
 # Uploaded per run, under <FROM_PRETRAINED>/ (e.g. local/ or base/):
 #   weights/  best checkpoint of each phase and the last checkpoint
@@ -24,7 +27,13 @@ UPLOAD_RETRIES=3
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$ROOT/src"
 
-repo_id() { echo "$HF_NAMESPACE/vit-cytology-$1"; }
+repo_id() {  # repo_id SCHEMA (uses $condition)
+    if [[ "$condition" == base ]]; then
+        echo "$HF_NAMESPACE/vit-base-cytology-$1"
+    else
+        echo "$HF_NAMESPACE/vit-cytology-$1"
+    fi
+}
 
 config_value() {  # config_value KEY [SUBKEY]
     "$PYTHON" -c "import sys, yaml
@@ -47,6 +56,8 @@ upload_run() {  # upload_run SCHEMA CONDITION STAGING_DIR
     return 1
 }
 
+condition="$(config_value DOWNSTREAM FROM_PRETRAINED)"
+
 # Check the login and create the repos before training, so that a permission
 # problem shows up now and not after hours of training.
 echo "Hugging Face login: $(hf auth whoami)"
@@ -54,7 +65,6 @@ for schema in "${SCHEMAS[@]}"; do
     hf repos create "$(repo_id "$schema")" --private --exist-ok
 done
 
-condition="$(config_value DOWNSTREAM FROM_PRETRAINED)"
 log_dir="$ROOT/$(config_value PROJECT_LOG)"
 finetuned_dir="$ROOT/$(config_value PATH_FINETUNED)"
 mkdir -p "$log_dir"
