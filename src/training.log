@@ -47,3 +47,13 @@
 2026-10-02 19:49:54 [INFO]: [eval] morphological/local/frozen (best epoch 3): recall=0.5000 auroc=0.1830 ap=0.3566
 2026-10-02 19:49:54 [INFO]: Loaded checkpoint from /tmp/claude-1350401337/-home-otavio-folador-medcloud-med-git-artigo-tcc/9b327d13-04a0-42c5-97ad-e040e531ba1e/scratchpad/evalroot/finetuned/morphological/local/vit_classifier_unfrozen.pt (epoch 3, metrics {})
 2026-10-02 19:49:56 [INFO]: [eval] morphological/local/unfrozen (best epoch 3): recall=0.5000 auroc=0.1830 ap=0.3566
+2026-10-03 00:45:07 [WARNING]: Skipping frozen: /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/base/vit_classifier_frozen.pt not found
+2026-10-03 00:45:07 [WARNING]: Skipping unfrozen: /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/base/vit_classifier_unfrozen.pt not found
+2026-10-03 00:48:17 [WARNING]: Skipping frozen: /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_frozen.pt not found
+2026-10-03 00:48:17 [WARNING]: Skipping unfrozen: /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_unfrozen.pt not found
+2026-10-03 00:51:00 [WARNING]: Skipping frozen: /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_frozen.pt not found
+2026-10-03 00:53:42 [WARNING]: Skipping frozen: /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_frozen.pt not found
+2026-10-03 01:01:09 [INFO]: Loaded checkpoint from /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_frozen.pt (epoch 8, metrics {'epoch': 8.0, 'train_loss': 0.5604908574578221, 'eval_loss': 0.6248527459338703, 'auroc': 0.9463016390800476, 'average_precision': 0.6876401305198669, 'recall': 0.5816126465797424})
+2026-10-03 01:03:35 [INFO]: [eval] bethesda/local/frozen (best epoch 8): recall=0.5839 auroc=0.9461 ap=0.7029
+2026-10-03 01:03:36 [INFO]: Loaded checkpoint from /mnt/data/home/otavio/UEPG/tcc/finetuned/bethesda/local/vit_classifier_unfrozen.pt (epoch 3, metrics {'epoch': 3.0, 'train_loss': 0.2850217292645226, 'eval_loss': 0.5169589962579507, 'auroc': 0.9658592939376831, 'average_precision': 0.7656600475311279, 'recall': 0.6790748834609985})
+2026-10-03 01:05:58 [INFO]: [eval] bethesda/local/unfrozen (best epoch 3): recall=0.6791 auroc=0.9642 ap=0.7695
