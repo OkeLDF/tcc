@@ -3,9 +3,9 @@ pandas
 scikit-learn
 torch
 torchvision
-transformers
+transformers==5.3.0
 datasets
-peft
+peft==0.18.1
 accelerate
 huggingface_hub
 opencv-python
